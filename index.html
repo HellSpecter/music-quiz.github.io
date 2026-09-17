@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Музыкальная викторина</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+  /* ==========================================================
+     ТОКЕНЫ ОФОРМЛЕНИЯ
+     ========================================================== */
+  :root{
+    --backdrop:#000000;
+    --stage-bg:#232327;
+    --surface:#2c2c31;
+    --surface-2:#1a1a1d;
+    --border-neutral:#5c5c63;
+    --border-strong:#ffffff;
+    --text-primary:#f4f4f6;
+    --text-muted:#a3a3aa;
+    --accent:#f2b134;
+    --accent-ink:#1c1c1f;
+    --viz-a:#6c63ff;
+    --viz-b:#38e8e0;
+
+    --p1:#ff0000; /* Тимур   rgb(255,0,0) — задано явно */
+    --p2:#ff8c1a; /* Коля    */
+    --p3:#ffd23f; /* Андрей  */
+    --p4:#5cb85c; /* Юра     */
+    --p5:#2ec4ff; /* Вася    */
+    --p6:#4267ff; /* Дима    */
+    --p7:#a259ff; /* Никита  */
+    --p8:#ff4fa3; /* Артём   */
+    --p9:#14b8a6; /* Альп    */
+    --p10:#5c5c63; /* резерв — участника пока нет */
+  }
+
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    background:var(--backdrop);
+    overflow:hidden;
+    font-family:'Manrope',sans-serif;
+    color:var(--text-primary);
+  }
+
+  /* ==========================================================
+     СЦЕНА — виртуальный холст 2560×1440, который целиком
+     масштабируется под реальный экран пользователя (letterbox).
+     Все внутренние координаты заданы в «настоящих» пикселях
+     этого холста и всегда сохраняют пропорции.
+     ========================================================== */
+  #stage{
+    position:fixed;
+    left:50%; top:50%;
+    width:2560px; height:1440px;
+    background:var(--stage-bg);
+    transform-origin:center center;
+    border-radius:8px;
+    overflow:hidden;
+  }
+
+  /* ---------- значок помощи ---------- */
+  .help-wrap{
+    position:absolute; left:24px; top:24px;
+    display:flex; align-items:center; gap:12px;
+    z-index:50;
+  }
+  .help-icon{
+    width:50px; height:50px;
+    cursor:pointer;
+    border-radius:50%;
+    transition:filter .15s, transform .15s;
+    filter:drop-shadow(0 0 0 rgba(0,0,0,0));
+  }
+  .help-icon:hover{ transform:scale(1.06); filter:drop-shadow(0 0 8px rgba(242,177,52,.55)); }
+  .help-tooltip{
+    background:var(--surface);
+    border:1px solid var(--border-neutral);
+    padding:8px 16px;
+    border-radius:10px;
+    font-size:18px;
+    font-weight:600;
+    white-space:nowrap;
+    opacity:0;
+    transform:translateX(-6px);
+    pointer-events:none;
+    transition:opacity .15s, transform .15s;
+  }
+  .help-wrap:hover .help-tooltip{ opacity:1; transform:translateX(0); }
+
+  /* ---------- левая половина: зона прослушивания ---------- */
+  .listen-area{
+    position:absolute;
+    left:120px; top:300px;
+    width:1040px; height:840px;
+  }
+  .viz{
+    position:absolute; top:0;
+    width:80px; height:840px;
+  }
+  .viz.left{ left:0; }
+  .viz.right{ right:0; }
+
+  .square-zone{
+    position:absolute; left:120px; top:0;
+    width:840px; height:840px;
+    border:3px dashed var(--border-strong);
+    border-radius:28px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,.02);
+    transition:background .15s, box-shadow .3s;
+  }
+  .square-zone:hover:not(.playing),
+  .square-zone.dragover:not(.playing){
+    background:rgba(255,255,255,.09);
+  }
+  .square-zone.playing{
+    box-shadow:0 0 0 3px rgba(108,99,255,.15), 0 0 60px rgba(56,232,224,.18);
+  }
+  .square-placeholder{
+    font-family:'Unbounded',sans-serif;
+    font-size:34px;
+    font-weight:600;
+    text-align:center;
+    line-height:1.4;
+    color:var(--text-muted);
+    max-width:480px;
+    pointer-events:none;
+  }
+  .square-zone.has-track .square-placeholder{ display:none; }
+
+  .replay-overlay{
+    position:absolute; inset:0;
+    display:none;
+    align-items:center; justify-content:center;
+    cursor:pointer;
+    z-index:5;
+  }
+  .square-zone.show-replay .replay-overlay{ display:flex; }
+  .replay-circle{
+    width:200px; height:200px;
+    border-radius:50%;
+    background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s, transform .15s;
+  }
+  .replay-overlay:hover .replay-circle{ background:rgba(0,0,0,.65); transform:scale(1.05); }
+  .replay-circle img{ width:155px; height:155px; }
+
+  /* ---------- фишки треков (переиспользуемый элемент) ---------- */
+  .chip{
+    position:relative;
+    border-radius:12px;
+    overflow:hidden;
+    cursor:grab;
+    flex:0 0 auto;
+    background:var(--surface-2);
+    container-type:inline-size;
+  }
+  .chip:active{ cursor:grabbing; }
+  .chip.dragging{ opacity:.35; }
+  .chip img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .chip-num{
+    position:absolute; right:4%; bottom:2%;
+    font-family:'Manrope',sans-serif;
+    font-weight:800;
+    font-size:clamp(8px, 24cqw, 40px);
+    color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.8);
+    line-height:1;
+    pointer-events:none;
+  }
+
+  .square-zone .chip{ width:760px; height:760px; border-radius:26px; }
+
+  /* ---------- правая половина ---------- */
+  .zones-container{
+    position:absolute; left:1350px; top:132px;
+    width:1188px; height:975px;
+    border:3px solid var(--border-strong);
+    border-radius:28px;
+    padding:40px;
+  }
+  .zones-grid{
+    display:grid;
+    grid-template-rows:repeat(5, 163px);
+    grid-auto-flow:column;
+    column-gap:20px; row-gap:20px;
+    width:100%; height:100%;
+  }
+  .zone{
+    --zc:#fff;
+    position:relative;
+    width:544px; height:163px;
+    border:2px dashed var(--zc);
+    border-radius:16px;
+    background:rgba(255,255,255,.02);
+    transition:background .15s;
+  }
+  .zone:hover, .zone.dragover{ background:rgba(255,255,255,.08); }
+  .zone.zone-empty{ opacity:.5; }
+  .zone.zone-empty:hover{ background:rgba(255,255,255,.02); }
+  .zone-label{
+    position:absolute; left:16px; top:8px;
+    font-family:'Unbounded',sans-serif;
+    font-size:17px;
+    font-weight:600;
+    color:var(--zc);
+  }
+  .zone-label.muted{ color:var(--text-muted); font-style:italic; font-weight:500; }
+  .zone-content{
+    position:absolute; left:8px; right:8px; top:34px; bottom:8px;
+    display:flex; flex-wrap:wrap; align-content:flex-start;
+    gap:4px;
+    overflow-y:auto;
+  }
+  .zone-content::-webkit-scrollbar{ width:6px; }
+  .zone-content::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.2); border-radius:3px; }
+
+  /* ---------- пул треков ---------- */
+  .pool-container{
+    position:absolute; left:1350px; top:1127px;
+    width:960px; height:180px;
+    border:2px solid var(--border-neutral);
+    border-radius:20px;
+    display:flex; align-items:center; gap:16px;
+    padding:0 20px;
+  }
+  .pool-container .chip{ width:140px; height:140px; }
+  .pool-plus{
+    width:140px; height:140px;
+    border-radius:14px;
+    background:var(--surface);
+    border:2px solid var(--border-neutral);
+    display:none;
+    align-items:center; justify-content:center;
+    font-family:'Unbounded',sans-serif;
+    font-size:24px; font-weight:700;
+    color:var(--text-primary);
+    cursor:pointer;
+    transition:background .15s, transform .15s;
+    flex:0 0 auto;
+  }
+  .pool-plus:hover{ background:#3a3a40; transform:scale(1.04); }
+
+  /* ---------- кнопка «Ваши ответы» ---------- */
+  .copy-btn{
+    position:absolute; left:2330px; top:1127px;
+    width:190px; height:180px;
+    border-radius:20px;
+    background:var(--surface-2);
+    border:2px solid var(--border-neutral);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:10px;
+    cursor:pointer;
+    transition:border-color .15s, transform .15s, background .15s;
+  }
+  .copy-btn:hover{ border-color:var(--accent); background:#222225; transform:translateY(-2px); }
+  .copy-btn img{ width:64px; height:64px; }
+  .copy-btn span{
+    font-family:'Unbounded',sans-serif;
+    font-size:15px; font-weight:600;
+    text-align:center;
+    color:var(--text-primary);
+  }
+
+  /* ==========================================================
+     ЭКРАН ЗАГРУЗКИ
+     ========================================================== */
+  #loading{
+    position:fixed; inset:0;
+    background:var(--backdrop);
+    display:flex; align-items:center; justify-content:center;
+    z-index:200;
+    font-family:'Unbounded',sans-serif;
+    font-size:24px;
+    color:var(--text-muted);
+    text-align:center;
+    padding:40px;
+  }
+
+  /* ==========================================================
+     МОДАЛЬНОЕ ОКНО ПРАВИЛ (вне сцены — всегда читаемо)
+     ========================================================== */
+  .modal-backdrop{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.65);
+    display:none;
+    align-items:center; justify-content:center;
+    z-index:300;
+  }
+  .modal-backdrop.visible{ display:flex; }
+  .modal-card{
+    background:var(--surface);
+    border:1px solid var(--border-neutral);
+    border-radius:20px;
+    max-width:560px; width:90%;
+    max-height:80vh; overflow-y:auto;
+    padding:32px 36px;
+    font-family:'Manrope',sans-serif;
+  }
+  .modal-card h2{
+    font-family:'Unbounded',sans-serif;
+    margin:0 0 16px;
+    font-size:26px;
+  }
+  .modal-card p{ line-height:1.6; color:var(--text-muted); }
+  .modal-close{
+    display:inline-block; margin-top:20px;
+    background:var(--accent); color:var(--accent-ink);
+    border:none; border-radius:10px;
+    padding:10px 22px;
+    font-family:'Manrope',sans-serif; font-weight:700; font-size:15px;
+    cursor:pointer;
+  }
+
+  /* ==========================================================
+     TOAST-УВЕДОМЛЕНИЕ
+     ========================================================== */
+  #toast{
+    position:fixed; left:50%; bottom:48px;
+    transform:translate(-50%, 20px);
+    background:var(--accent); color:var(--accent-ink);
+    padding:16px 28px;
+    border-radius:12px;
+    font-family:'Manrope',sans-serif; font-weight:700; font-size:16px;
+    opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;
+    z-index:400;
+  }
+  #toast.visible{ opacity:1; transform:translate(-50%, 0); }
+</style>
+</head>
+<body>
+
+<div id="loading">Загрузка треков…</div>
+
+<div id="stage">
+
+  <!-- Значок помощи -->
+  <div class="help-wrap" id="helpWrap">
+    <img class="help-icon" src="ui/tip.png" alt="Помощь" id="helpIcon">
+    <div class="help-tooltip">Чё делать?</div>
+  </div>
+
+  <!-- Левая половина: прослушивание -->
+  <div class="listen-area">
+    <canvas class="viz left" id="vizLeft"></canvas>
+    <div class="square-zone" id="squareZone">
+      <div class="square-placeholder">Перетащите,<br>чтобы послушать</div>
+      <div class="replay-overlay" id="replayOverlay">
+        <div class="replay-circle"><img src="ui/play.png" alt="Слушать ещё раз"></div>
+      </div>
+    </div>
+    <canvas class="viz right" id="vizRight"></canvas>
+  </div>
+
+  <!-- Правая половина: участники -->
+  <div class="zones-container">
+    <div class="zones-grid" id="zonesGrid"></div>
+  </div>
+
+  <div class="pool-container" id="poolContainer">
+    <div id="poolSlots" style="display:flex; gap:16px;"></div>
+    <div class="pool-plus" id="poolPlus">+0</div>
+  </div>
+
+  <div class="copy-btn" id="copyBtn">
+    <img src="ui/copy.png" alt="Копировать">
+    <span>Ваши ответы</span>
+  </div>
+
+</div>
+
+<div class="modal-backdrop" id="rulesModal">
+  <div class="modal-card">
+    <h2>Правила</h2>
+    <p>Здесь появится текст правил. Замените этот плейсхолдер своим текстом в файле index.html (блок с id="rulesModal").</p>
+    <button class="modal-close" id="modalClose">Понятно</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ==========================================================
+     НАСТРОЙКИ — поменяйте при необходимости
+     ========================================================== */
+  const SONGS_DIR = 'songs';
+  const PICS_DIR  = 'pctrs';
+  const AUDIO_EXT = '.mp3';
+  const PIC_EXT   = '.jpeg';
+
+  // Имена участников по порядку зон 1..10 (зона 10 сейчас пуста)
+  const ZONE_NAMES  = ['Тимур','Коля','Андрей','Юра','Вася','Дима','Никита','Артём','Альп', null];
+  const ZONE_COLORS = ['var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--p5)','var(--p6)','var(--p7)','var(--p8)','var(--p9)','var(--p10)'];
+
+  const POOL_VISIBLE     = 5;
+  const DEFAULT_ZONE_ICON = 115;
+  const MIN_ZONE_ICON     = 10;
+
+  const STAGE_W = 2560, STAGE_H = 1440;
+
+  /* ==========================================================
+     МАСШТАБИРОВАНИЕ СЦЕНЫ ПОД ЭКРАН ПОЛЬЗОВАТЕЛЯ
+     ========================================================== */
+  const stageEl = document.getElementById('stage');
+  function scaleStage(){
+    const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    stageEl.style.transform = 'translate(-50%,-50%) scale(' + scale + ')';
+  }
+  window.addEventListener('resize', scaleStage);
+  scaleStage();
+
+  /* ==========================================================
+     СОСТОЯНИЕ ИГРЫ
+     ========================================================== */
+  let TOTAL_TRACKS = 0;
+  const chipsById = new Map();
+  let poolOrder = [];     // id треков, ещё не распределённых и не в проигрывателе
+  let poolPage = 0;
+  const zoneAssignments = {}; // {1:[id,...], ..., 9:[...]}
+  let squareTrackId = null;
+
+  const poolBuffer = document.createElement('div');
+  poolBuffer.style.display = 'none';
+  document.body.appendChild(poolBuffer);
+
+  /* ==========================================================
+     ОПРЕДЕЛЕНИЕ КОЛИЧЕСТВА ТРЕКОВ
+     Пробуем последовательно загрузить pctrs/1.jpeg, 2.jpeg, ...
+     пока файл не перестанет существовать. Так число треков
+     всегда равно числу файлов, реально лежащих в папке.
+     ========================================================== */
+  function picExists(n){
+    return new Promise(function(resolve){
+      const img = new Image();
+      img.onload = function(){ resolve(true); };
+      img.onerror = function(){ resolve(false); };
+      img.src = PICS_DIR + '/' + n + PIC_EXT;
+    });
+  }
+
+  async function detectTrackCount(){
+    let n = 1;
+    while(await picExists(n)){
+      n++;
+      if(n > 2000) break; // защита от бесконечного цикла
+    }
+    return n - 1;
+  }
+
+  /* ==========================================================
+     СОЗДАНИЕ ФИШКИ ТРЕКА
+     ========================================================== */
+  function createChip(id){
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.draggable = true;
+    chip.dataset.id = String(id);
+
+    const img = document.createElement('img');
+    img.src = PICS_DIR + '/' + id + PIC_EXT;
+    img.alt = 'Трек ' + id;
+    chip.appendChild(img);
+
+    const num = document.createElement('span');
+    num.className = 'chip-num';
+    num.textContent = String(id);
+    chip.appendChild(num);
+
+    chip.addEventListener('dragstart', function(e){
+      e.dataTransfer.setData('text/plain', String(id));
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(function(){ chip.classList.add('dragging'); }, 0);
+    });
+    chip.addEventListener('dragend', function(){
+      chip.classList.remove('dragging');
+    });
+
+    return chip;
+  }
+
+  function getChip(id){ return chipsById.get(Number(id)); }
+
+  /* ==========================================================
+     ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ
+     ========================================================== */
+  const zonesGrid = document.getElementById('zonesGrid');
+  const zoneContentEls = {};
+
+  function buildZones(){
+    for(let z = 1; z <= 10; z++){
+      const name = ZONE_NAMES[z-1];
+      const color = ZONE_COLORS[z-1];
+      const isEmpty = (name === null);
+
+      const zoneEl = document.createElement('div');
+      zoneEl.className = 'zone' + (isEmpty ? ' zone-empty' : '');
+      zoneEl.style.setProperty('--zc', color);
+      zoneEl.dataset.zone = String(z);
+
+      const label = document.createElement('div');
+      label.className = 'zone-label' + (isEmpty ? ' muted' : '');
+      label.textContent = isEmpty ? 'пока нет участника' : name;
+      zoneEl.appendChild(label);
+
+      const content = document.createElement('div');
+      content.className = 'zone-content';
+      zoneEl.appendChild(content);
+
+      zonesGrid.appendChild(zoneEl);
+
+      if(!isEmpty){
+        zoneAssignments[z] = [];
+        zoneContentEls[z] = content;
+
+        zoneEl.addEventListener('dragenter', function(e){ e.preventDefault(); zoneEl.classList.add('dragover'); });
+        zoneEl.addEventListener('dragover', function(e){ e.preventDefault(); });
+        zoneEl.addEventListener('dragleave', function(){ zoneEl.classList.remove('dragover'); });
+        zoneEl.addEventListener('drop', function(e){
+          e.preventDefault();
+          zoneEl.classList.remove('dragover');
+          const id = e.dataTransfer.getData('text/plain');
+          if(id !== '') moveTrackTo(id, 'zone', z);
+        });
+      }
+      // зона isEmpty намеренно не получает обработчик drop — сброс в неё невозможен
+    }
+  }
+
+  function resizeZoneIcons(z){
+    const contentEl = zoneContentEls[z];
+    const ids = zoneAssignments[z];
+    const n = ids.length;
+    if(n === 0) return;
+    const W = contentEl.offsetWidth;
+    const H = contentEl.offsetHeight;
+    let s = DEFAULT_ZONE_ICON;
+    while(s > MIN_ZONE_ICON){
+      const cols = Math.max(1, Math.floor(W / s));
+      const rows = Math.max(1, Math.floor(H / s));
+      if(cols * rows >= n) break;
+      s -= 1;
+    }
+    if(s < MIN_ZONE_ICON) s = MIN_ZONE_ICON;
+    ids.forEach(function(id){
+      const chip = getChip(id);
+      chip.style.width = s + 'px';
+      chip.style.height = s + 'px';
+    });
+  }
+
+  /* ==========================================================
+     ПУЛ ТРЕКОВ
+     ========================================================== */
+  const poolSlots = document.getElementById('poolSlots');
+  const poolPlus  = document.getElementById('poolPlus');
+  const poolContainer = document.getElementById('poolContainer');
+
+  function refreshPoolRender(){
+    const pageCount = Math.max(1, Math.ceil(poolOrder.length / POOL_VISIBLE));
+    if(poolPage >= pageCount) poolPage = 0;
+    const start = poolPage * POOL_VISIBLE;
+    const visibleIds = poolOrder.slice(start, start + POOL_VISIBLE);
+
+    Array.from(poolSlots.children).forEach(function(ch){ poolBuffer.appendChild(ch); });
+    visibleIds.forEach(function(id){ poolSlots.appendChild(getChip(id)); });
+
+    const remaining = poolOrder.length - visibleIds.length;
+    if(remaining > 0){
+      poolPlus.style.display = 'flex';
+      poolPlus.textContent = '+' + remaining;
+    } else {
+      poolPlus.style.display = 'none';
+    }
+  }
+
+  poolPlus.addEventListener('click', function(){
+    poolPage++;
+    refreshPoolRender();
+  });
+
+  poolContainer.addEventListener('dragover', function(e){ e.preventDefault(); poolContainer.classList.add('dragover'); });
+  poolContainer.addEventListener('dragleave', function(){ poolContainer.classList.remove('dragover'); });
+  poolContainer.addEventListener('drop', function(e){
+    e.preventDefault();
+    poolContainer.classList.remove('dragover');
+    const id = e.dataTransfer.getData('text/plain');
+    if(id !== '') moveTrackTo(id, 'pool');
+  });
+
+  /* ==========================================================
+     ЗОНА ПРОСЛУШИВАНИЯ (КВАДРАТ)
+     ========================================================== */
+  const squareZone = document.getElementById('squareZone');
+  const replayOverlay = document.getElementById('replayOverlay');
+
+  squareZone.addEventListener('dragenter', function(e){ e.preventDefault(); squareZone.classList.add('dragover'); });
+  squareZone.addEventListener('dragover', function(e){ e.preventDefault(); });
+  squareZone.addEventListener('dragleave', function(){ squareZone.classList.remove('dragover'); });
+  squareZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    squareZone.classList.remove('dragover');
+    const id = e.dataTransfer.getData('text/plain');
+    if(id !== '') moveTrackTo(id, 'square');
+  });
+
+  replayOverlay.addEventListener('click', function(){
+    if(squareTrackId === null) return;
+    audioEl.currentTime = 0;
+    audioEl.play().catch(function(){});
+    squareZone.classList.remove('show-replay');
+    squareZone.classList.add('playing');
+    startVisualizer();
+  });
+
+  /* ==========================================================
+     ПЕРЕМЕЩЕНИЕ ТРЕКА МЕЖДУ ЗОНАМИ (ЕДИНАЯ ТОЧКА ВХОДА)
+     ========================================================== */
+  function moveTrackTo(idStr, destType, destZone){
+    const id = Number(idStr);
+    if(!chipsById.has(id)) return;
+
+    if(destType === 'square' && squareTrackId === id) return; // уже там
+
+    // убираем id из текущего логического места
+    const poolIdx = poolOrder.indexOf(id);
+    if(poolIdx > -1) poolOrder.splice(poolIdx, 1);
+
+    for(const z in zoneAssignments){
+      const arr = zoneAssignments[z];
+      const i = arr.indexOf(id);
+      if(i > -1){
+        arr.splice(i, 1);
+        resizeZoneIcons(Number(z));
+      }
+    }
+
+    const wasInSquare = (squareTrackId === id);
+    if(wasInSquare && destType !== 'square'){
+      pauseAudio();
+      squareTrackId = null;
+      squareZone.classList.remove('has-track', 'show-replay');
+    }
+
+    const chip = getChip(id);
+
+    if(destType === 'pool'){
+      poolOrder.push(id);
+      refreshPoolRender();
+
+    } else if(destType === 'square'){
+      if(squareTrackId !== null && squareTrackId !== id){
+        poolOrder.push(squareTrackId); // прежний трек возвращается в пул
+      }
+      squareTrackId = id;
+      squareZone.appendChild(chip);
+      squareZone.classList.add('has-track');
+      squareZone.classList.remove('show-replay');
+      refreshPoolRender();
+      playTrack(id);
+
+    } else if(destType === 'zone'){
+      zoneAssignments[destZone].push(id);
+      zoneContentEls[destZone].appendChild(chip);
+      resizeZoneIcons(destZone);
+      refreshPoolRender();
+    }
+  }
+
+  /* ==========================================================
+     АУДИО + ВИЗУАЛИЗАЦИЯ ЧАСТОТ
+     ========================================================== */
+  const audioEl = new Audio();
+  let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
+
+  const vizLeft  = document.getElementById('vizLeft');
+  const vizRight = document.getElementById('vizRight');
+  const dpr = window.devicePixelRatio || 1;
+  [vizLeft, vizRight].forEach(function(cv){
+    cv.width  = 80 * dpr;
+    cv.height = 840 * dpr;
+  });
+  const ctxLeft  = vizLeft.getContext('2d');
+  const ctxRight = vizRight.getContext('2d');
+  ctxLeft.scale(dpr, dpr);
+  ctxRight.scale(dpr, dpr);
+
+  function ensureAudioGraph(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      sourceNode = audioCtx.createMediaElementSource(audioEl);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 128;
+      sourceNode.connect(analyser);
+      analyser.connect(audioCtx.destination);
+    }
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function playTrack(id){
+    ensureAudioGraph();
+    audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
+    audioEl.currentTime = 0;
+    audioEl.play().catch(function(err){ console.warn('Не удалось начать воспроизведение', err); });
+    squareZone.classList.add('playing');
+    squareZone.classList.remove('show-replay');
+    startVisualizer();
+  }
+
+  function pauseAudio(){
+    audioEl.pause();
+    squareZone.classList.remove('playing', 'show-replay');
+    stopVisualizer();
+  }
+
+  audioEl.addEventListener('ended', function(){
+    squareZone.classList.remove('playing');
+    squareZone.classList.add('show-replay');
+    stopVisualizer();
+  });
+
+  function drawBars(ctx, data, w, h, mirror){
+    ctx.clearRect(0, 0, w, h);
+    const barCount = data.length;
+    const barWidth = w / barCount;
+    const grad = ctx.createLinearGradient(0, h, 0, 0);
+    grad.addColorStop(0, '#6c63ff');
+    grad.addColorStop(1, '#38e8e0');
+    ctx.fillStyle = grad;
+    for(let i = 0; i < barCount; i++){
+      const value = data[i] / 255;
+      const barH = Math.max(2, value * h);
+      const x = mirror ? (w - (i + 1) * barWidth) : i * barWidth;
+      ctx.fillRect(x, h - barH, Math.max(1, barWidth - 2), barH);
+    }
+  }
+
+  function startVisualizer(){
+    if(!analyser) return;
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function draw(){
+      rafId = requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(data);
+      drawBars(ctxLeft, data, 80, 840, false);
+      drawBars(ctxRight, data, 80, 840, true);
+    }
+    draw();
+  }
+
+  function stopVisualizer(){
+    if(rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+    ctxLeft.clearRect(0, 0, 80, 840);
+    ctxRight.clearRect(0, 0, 80, 840);
+  }
+
+  /* ==========================================================
+     СТРОКА ОТВЕТОВ И КОПИРОВАНИЕ
+     ========================================================== */
+  function buildAnswerString(){
+    const parts = [];
+    for(let z = 1; z <= 10; z++){
+      const ids = (zoneAssignments[z] || []).slice().sort(function(a,b){ return a-b; });
+      parts.push(z + ':' + (ids.length ? ids.join(',') : '0'));
+    }
+    return parts.join(' ');
+  }
+
+  const toastEl = document.getElementById('toast');
+  let toastTimer = null;
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('visible'); }, 3000);
+  }
+
+  document.getElementById('copyBtn').addEventListener('click', async function(){
+    const str = buildAnswerString();
+    try{
+      await navigator.clipboard.writeText(str);
+    }catch(e){
+      const ta = document.createElement('textarea');
+      ta.value = str;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try{ document.execCommand('copy'); }catch(e2){}
+      ta.remove();
+    }
+    showToast('Ваши ответы скопированы, скиньте их организатору');
+  });
+
+  /* ==========================================================
+     ПОДСКАЗКА И МОДАЛЬНОЕ ОКНО ПРАВИЛ
+     ========================================================== */
+  const rulesModal = document.getElementById('rulesModal');
+  document.getElementById('helpIcon').addEventListener('click', function(){
+    rulesModal.classList.add('visible');
+  });
+  document.getElementById('modalClose').addEventListener('click', function(){
+    rulesModal.classList.remove('visible');
+  });
+  rulesModal.addEventListener('click', function(e){
+    if(e.target === rulesModal) rulesModal.classList.remove('visible');
+  });
+
+  /* ==========================================================
+     ИНИЦИАЛИЗАЦИЯ
+     ========================================================== */
+  async function init(){
+    TOTAL_TRACKS = await detectTrackCount();
+    const loadingEl = document.getElementById('loading');
+
+    if(TOTAL_TRACKS === 0){
+      loadingEl.innerHTML = 'Не найдено ни одного трека.<br>Проверьте, что файлы лежат в папках «' + PICS_DIR + '» (' + PIC_EXT + ') и «' + SONGS_DIR + '» (' + AUDIO_EXT + '), пронумерованные с 1.';
+      return;
+    }
+
+    buildZones();
+
+    // создаём фишки для всех треков и складываем их в буфер
+    const ids = [];
+    for(let i = 1; i <= TOTAL_TRACKS; i++){
+      const chip = createChip(i);
+      chipsById.set(i, chip);
+      poolBuffer.appendChild(chip);
+      ids.push(i);
+    }
+
+    // перемешиваем порядок появления в пуле — для динамичности от игры к игре
+    for(let i = ids.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
+    }
+    poolOrder = ids;
+
+    refreshPoolRender();
+    loadingEl.style.display = 'none';
+  }
+
+  init();
+
+})();
+</script>
+</body>
+</html>
