@@ -7,13 +7,6 @@
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
 
-  /* ==========================================================
-     ТОКЕНЫ ОФОРМЛЕНИЯ
-     Цвета участников хранятся как RGB-тройки (без rgb()),
-     чтобы можно было использовать их и как непрозрачный цвет
-     (rgb(var(--zc))), и как полупрозрачную заливку при наведении
-     (rgba(var(--zc), .1)).
-     ========================================================== */
   :root{
     --stage-bg:#232327;
     --surface:#2c2c31;
@@ -53,15 +46,14 @@
   img{ -webkit-user-drag:none; user-drag:none; }
 
   /* ==========================================================
-     СЦЕНА — виртуальный холст 2560×1240, целиком масштабируется
-     под экран пользователя так, чтобы всегда заполнять окно
-     по обеим осям (без чёрных полос по бокам); привязка к верху,
-     поэтому если что-то и обрежется — то небольшой запас снизу.
+     СЦЕНА — виртуальный холст, масштабируется под экран так,
+     чтобы всегда заполнять окно по обеим осям (без чёрных полос),
+     с небольшим запасом (0.99), чтобы не вылезать за низ страницы.
      ========================================================== */
   #stage{
     position:fixed;
     left:50%; top:0;
-    width:2560px; height:1240px;
+    width:2560px; height:1150px;
     background:var(--stage-bg);
     transform-origin:top center;
   }
@@ -96,30 +88,29 @@
 
   /* ---------- левая половина: плеер + визуализация по периметру ---------- */
   .player-wrap{
-    position:absolute; left:130px; top:50px;
-    width:1020px; height:1020px;
+    position:absolute; left:150px; top:24px;
+    width:980px; height:980px;
   }
   #vizCanvas{
     position:absolute; inset:0;
-    width:1020px; height:1020px;
+    width:980px; height:980px;
     pointer-events:none;
   }
   .square-zone{
-    position:absolute; left:90px; top:90px;
-    width:840px; height:840px;
+    position:absolute; left:80px; top:80px;
+    width:820px; height:820px;
     border:3px dashed var(--border-strong);
     border-radius:28px;
     overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     background:rgba(255,255,255,.02);
-    transition:background .15s, border-color .2s, border-radius .2s;
+    transition:background .15s, border-color .2s, border-radius .2s, box-shadow .3s;
     z-index:2;
   }
   .square-zone:hover:not(.playing),
   .square-zone.dragover:not(.playing){
     background:rgba(255,255,255,.09);
   }
-  /* когда трек загружен — квадрат без скруглений и без пунктира */
   .square-zone.has-track{
     border-radius:0;
     border-color:transparent;
@@ -136,7 +127,6 @@
   }
   .square-zone.has-track .square-placeholder{ display:none; }
 
-  /* трек, находящийся в плеере — полностью заполняет квадрат, без скруглений */
   .square-zone > .chip{
     width:100%; height:100%;
     border-radius:0;
@@ -144,9 +134,9 @@
 
   /* ---------- управление плеером: прогресс, громкость, play/pause ---------- */
   .player-controls{
-    position:absolute; left:220px; top:1094px;
-    width:840px;
-    display:flex; flex-direction:column; gap:18px;
+    position:absolute; left:230px; top:1020px;
+    width:820px;
+    display:flex; flex-direction:column; gap:14px;
     transition:opacity .2s;
   }
   .player-controls.disabled{ opacity:.35; pointer-events:none; }
@@ -155,11 +145,13 @@
     border-radius:4px;
     background:var(--border-neutral);
     overflow:hidden;
+    cursor:pointer;
   }
   .progress-fill{
     height:100%; width:0%;
     background:#fff;
     border-radius:4px;
+    pointer-events:none;
   }
   .controls-row{
     display:flex; align-items:center; justify-content:space-between;
@@ -208,9 +200,13 @@
     flex:0 0 auto;
   }
   .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.04); }
-  .play-pause-btn img{ width:26px; height:26px; }
+  /* иконка play/pause принудительно белая, независимо от исходных цветов png */
+  .play-pause-btn img{
+    width:26px; height:26px;
+    filter:brightness(0) saturate(100%) invert(1);
+  }
 
-  /* ---------- фишки треков (переиспользуемый элемент) ---------- */
+  /* ---------- фишки треков ---------- */
   .chip{
     position:relative;
     width:115px; height:115px;
@@ -237,7 +233,7 @@
 
   /* ---------- правая половина ---------- */
   .zones-container{
-    position:absolute; left:1350px; top:50px;
+    position:absolute; left:1350px; top:24px;
     width:1148px; height:935px;
     border:3px solid var(--border-strong);
     border-radius:28px;
@@ -278,13 +274,11 @@
   }
   .zone-content::-webkit-scrollbar{ width:6px; }
   .zone-content::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.2); border-radius:3px; }
-  .zone-content .chip.drop-target-before{ box-shadow:-3px 0 0 0 var(--accent); }
-  .zone-content .chip.drop-target-after{ box-shadow:3px 0 0 0 var(--accent); }
 
   /* ---------- пул треков ---------- */
   .pool-container{
-    position:absolute; left:1350px; top:1005px;
-    width:960px; height:180px;
+    position:absolute; left:1350px; top:975px;
+    width:960px; height:140px;
     border:2px solid var(--border-neutral);
     border-radius:20px;
     display:flex; align-items:center; gap:16px;
@@ -308,8 +302,8 @@
 
   /* ---------- кнопка «Отправить ответы» ---------- */
   .submit-btn{
-    position:absolute; left:2330px; top:1005px;
-    width:190px; height:180px;
+    position:absolute; left:2330px; top:975px;
+    width:190px; height:140px;
     border-radius:20px;
     background:var(--surface-2);
     border:2px solid var(--border-neutral);
@@ -322,7 +316,7 @@
   .submit-btn svg{ color:var(--text-primary); }
   .submit-btn span{
     font-family:'Unbounded',sans-serif;
-    font-size:15px; font-weight:600;
+    font-size:14px; font-weight:600;
     text-align:center;
     color:var(--text-primary);
   }
@@ -413,13 +407,11 @@
 
 <div id="stage">
 
-  <!-- Значок помощи -->
   <div class="help-wrap" id="helpWrap">
     <img class="help-icon" src="ui/tip.png" alt="Помощь" id="helpIcon" draggable="false">
     <div class="help-tooltip">Чё делать?</div>
   </div>
 
-  <!-- Левая половина: плеер -->
   <div class="player-wrap">
     <canvas id="vizCanvas"></canvas>
     <div class="square-zone" id="squareZone">
@@ -428,7 +420,7 @@
   </div>
 
   <div class="player-controls disabled" id="playerControls">
-    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     <div class="controls-row">
       <div class="volume-pill">
         <svg class="volume-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -445,7 +437,6 @@
     </div>
   </div>
 
-  <!-- Правая половина: участники -->
   <div class="zones-container">
     <div class="zones-grid" id="zonesGrid"></div>
   </div>
@@ -504,34 +495,32 @@
   "use strict";
 
   /* ==========================================================
-     НАСТРОЙКИ — поменяйте при необходимости
+     НАСТРОЙКИ
      ========================================================== */
   const SONGS_DIR = 'songs';
   const PICS_DIR  = 'pctrs';
   const AUDIO_EXT = '.mp3';
   const PIC_EXT   = '.jpeg';
 
-  // Имена участников по порядку зон 1..10 (зона 10 сейчас пуста)
   const ZONE_NAMES  = ['Тимур','Коля','Андрей','Юра','Вася','Дима','Никита','Артём','Альп', null];
   const ZONE_COLORS = ['var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--p5)','var(--p6)','var(--p7)','var(--p8)','var(--p9)','var(--p10)'];
 
-  // Google-форма для приёма ответов
   const GOOGLE_FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSeeL3Qk6PUrViR5eoiaeZ-LCiy62tj3XXP6igKXWE0NTl11hw/formResponse';
   const GOOGLE_FORM_FIELD  = 'entry.2025397665';
 
   const POOL_VISIBLE      = 5;
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
-  const ZONE_ROW_CAP      = 8;   // сколько треков помещается в одну строку зоны
+  const ZONE_ROW_CAP      = 8;
 
-  const STAGE_W = 2560, STAGE_H = 1240;
+  const STAGE_W = 2560, STAGE_H = 1150;
 
   /* ==========================================================
-     МАСШТАБИРОВАНИЕ СЦЕНЫ ПОД ЭКРАН ПОЛЬЗОВАТЕЛЯ
+     МАСШТАБИРОВАНИЕ СЦЕНЫ
      ========================================================== */
   const stageEl = document.getElementById('stage');
   function scaleStage(){
-    const scale = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    const scale = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H) * 0.99;
     stageEl.style.transform = 'translateX(-50%) scale(' + scale + ')';
   }
   window.addEventListener('resize', scaleStage);
@@ -542,9 +531,9 @@
      ========================================================== */
   let TOTAL_TRACKS = 0;
   const chipsById = new Map();
-  let poolOrder = [];          // id треков, ещё не распределённых и не в плеере
+  let poolOrder = [];
   let poolPage = 0;
-  const zoneAssignments = {};  // {1:[id,...], ..., 9:[...]}  порядок = порядок отображения
+  const zoneAssignments = {};
   let squareTrackId = null;
 
   const poolBuffer = document.createElement('div');
@@ -621,8 +610,6 @@
       chip.classList.remove('dragging');
     });
 
-    // Позволяет бросить один трек ПРЯМО НА другой — для перестановки
-    // внутри зоны (или для замены трека в плеере/возврата в пул).
     chip.addEventListener('dragover', function(e){
       e.preventDefault();
       e.stopPropagation();
@@ -698,12 +685,9 @@
           if(id !== '') moveTrackTo(id, 'zone', z);
         });
       }
-      // зона isEmpty намеренно не получает обработчик drop
     }
   }
 
-  // До 8 треков — одна строка (иконки сжимаются по ширине).
-  // 9-16 — две строки. Больше — те же размеры, что для 16, и скролл.
   function resizeZoneIcons(z){
     const contentEl = zoneContentEls[z];
     const ids = zoneAssignments[z];
@@ -771,13 +755,14 @@
   });
 
   /* ==========================================================
-     ЗОНА ПЛЕЕРА (КВАДРАТ)
+     ЗОНА ПЛЕЕРА
      ========================================================== */
   const squareZone = document.getElementById('squareZone');
   const playerControls = document.getElementById('playerControls');
   const playPauseBtn = document.getElementById('playPauseBtn');
   const playPauseIcon = document.getElementById('playPauseIcon');
   const progressFill = document.getElementById('progressFill');
+  const progressTrack = document.getElementById('progressTrack');
 
   squareZone.addEventListener('dragenter', function(e){ e.preventDefault(); squareZone.classList.add('dragover'); });
   squareZone.addEventListener('dragover', function(e){ e.preventDefault(); });
@@ -796,8 +781,6 @@
   /* ==========================================================
      ПЕРЕМЕЩЕНИЕ ТРЕКОВ
      ========================================================== */
-
-  // Убирает id из пула / любой зоны / плеера (общая часть перед вставкой в новое место)
   function detachTrack(id){
     const chip = getChip(id);
     chip.style.width = '';
@@ -816,6 +799,7 @@
       audioEl.pause();
       squareTrackId = null;
       squareZone.classList.remove('has-track', 'playing');
+      squareZone.style.boxShadow = 'none';
       updatePlayerControlsState();
     }
     return chip;
@@ -857,7 +841,6 @@
     }
   }
 
-  // Вставка трека в зону на конкретную позицию (перед/после targetId) — для перестановки
   function moveTrackToZoneAt(idStr, destZone, targetId, before){
     const id = Number(idStr);
     if(!chipsById.has(id)) return;
@@ -887,7 +870,19 @@
      ========================================================== */
   const audioEl = new Audio();
   audioEl.volume = 1;
-  let currentVizColors = ['#6c63ff', '#38e8e0'];
+
+  let currentVizColors = [[108,99,255],[56,232,224]]; // rgb-тройки, по умолчанию до загрузки обложки
+  let currentGlowColor  = [170,165,255];
+
+  function rgbStr(rgb){ return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')'; }
+  function rgbaStr(rgb, a){ return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')'; }
+  function lighten(rgb, amount){
+    return [
+      Math.round(rgb[0] + (255 - rgb[0]) * amount),
+      Math.round(rgb[1] + (255 - rgb[1]) * amount),
+      Math.round(rgb[2] + (255 - rgb[2]) * amount)
+    ];
+  }
 
   function extractImageColors(imgSrc, callback){
     const img = new Image();
@@ -898,14 +893,23 @@
         const cctx = c.getContext('2d');
         cctx.drawImage(img, 0, 0, 4, 4);
         const d = cctx.getImageData(0, 0, 4, 4).data;
-        const c1 = 'rgb(' + d[0] + ',' + d[1] + ',' + d[2] + ')';
+        const c1 = [d[0], d[1], d[2]];
         const idx2 = 15 * 4;
-        const c2 = 'rgb(' + d[idx2] + ',' + d[idx2+1] + ',' + d[idx2+2] + ')';
+        const c2 = [d[idx2], d[idx2+1], d[idx2+2]];
         callback([c1, c2]);
       }catch(err){ callback(null); }
     };
     img.onerror = function(){ callback(null); };
     img.src = imgSrc;
+  }
+
+  function applyGlow(){
+    const g1 = lighten(currentVizColors[0], 0.45);
+    const g2 = lighten(currentVizColors[1], 0.45);
+    currentGlowColor = g1;
+    squareZone.style.boxShadow =
+      '0 0 50px 8px ' + rgbaStr(g1, .35) + ', ' +
+      '0 0 90px 20px ' + rgbaStr(g2, .20);
   }
 
   function playTrack(id){
@@ -915,7 +919,8 @@
     progressFill.style.width = '0%';
     audioEl.play().catch(function(err){ console.warn('Не удалось начать воспроизведение', err); });
     extractImageColors(PICS_DIR + '/' + id + PIC_EXT, function(colors){
-      currentVizColors = colors || ['#6c63ff', '#38e8e0'];
+      currentVizColors = colors || [[108,99,255],[56,232,224]];
+      applyGlow();
     });
   }
 
@@ -951,6 +956,18 @@
     progressFill.style.width = pct + '%';
   });
 
+  // перемотка кликом/протаскиванием по полоске прогресса
+  function seekFromEvent(e){
+    if(squareTrackId === null || !audioEl.duration) return;
+    const rect = progressTrack.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    audioEl.currentTime = ratio * audioEl.duration;
+  }
+  let scrubbing = false;
+  progressTrack.addEventListener('mousedown', function(e){ scrubbing = true; seekFromEvent(e); });
+  window.addEventListener('mousemove', function(e){ if(scrubbing) seekFromEvent(e); });
+  window.addEventListener('mouseup', function(){ scrubbing = false; });
+
   const volumeSlider = document.getElementById('volumeSlider');
   const volumePct = document.getElementById('volumePct');
   volumeSlider.addEventListener('input', function(e){
@@ -960,16 +977,21 @@
   });
 
   /* ==========================================================
-     ВИЗУАЛИЗАЦИЯ ЧАСТОТ — рамка из 100 «палочек» на каждой грани,
-     все грани показывают один и тот же полный спектр (низкие →
-     высокие), сильно скруглённые концы, градиент по цветам обложки.
+     ВИЗУАЛИЗАЦИЯ ЧАСТОТ
+     102 палочки на грань (первая/последняя слегка выступают за
+     угол — для плавного «опоясывания»), все грани показывают
+     один и тот же полный спектр; низ и лево — инвертированы,
+     чтобы низкие частоты «стекались» к правому нижнему углу.
+     Плюс нормализация/сглаживание спектра, свечение позади
+     палочек и немного «музыкальных» частиц.
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
-  const WRAP_SIZE     = 1020;
-  const SQUARE_SIZE   = 840;
-  const MARGIN        = (WRAP_SIZE - SQUARE_SIZE) / 2; // 90
-  const BARS_PER_SIDE = 100;
+  const WRAP_SIZE     = 980;
+  const SQUARE_SIZE   = 820;
+  const MARGIN        = (WRAP_SIZE - SQUARE_SIZE) / 2; // 80
+  const BARS_PER_SIDE = 102;
+  const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2); // шаг рассчитан на 100 делений
 
   const vizCanvas = document.getElementById('vizCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -983,7 +1005,8 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512; // 256 бинов — с запасом для ресемплинга в 100 столбиков
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0.85;
       sourceNode.connect(analyser);
       analyser.connect(audioCtx.destination);
     }
@@ -999,6 +1022,34 @@
     return out;
   }
 
+  // компенсирует естественный спад высоких частот и подтягивает тихие сигналы,
+  // при этом басы остаются чуть заметнее верхних
+  function normalizeSpectrum(rawArr){
+    const n = rawArr.length;
+    const out = new Float32Array(n);
+    for(let i = 0; i < n; i++){
+      let v = rawArr[i] / 255;
+      const t = i / (n - 1);
+      const boost = 1 + 1.7 * t;
+      v = Math.min(1, v * boost);
+      v = Math.pow(v, 0.55);
+      v = v * (1.12 - 0.12 * t);
+      out[i] = Math.min(1, v);
+    }
+    return out;
+  }
+
+  function smoothArray(arr){
+    const n = arr.length;
+    const out = new Float32Array(n);
+    for(let i = 0; i < n; i++){
+      const prev = arr[(i - 1 + n) % n];
+      const next = arr[(i + 1) % n];
+      out[i] = (prev + arr[i] * 2 + next) / 4;
+    }
+    return out;
+  }
+
   function roundedBar(x, y, w, h, r){
     r = Math.max(0, Math.min(r, w / 2, h / 2));
     vctx.beginPath();
@@ -1010,31 +1061,72 @@
     vctx.fill();
   }
 
+  // ---- частицы ----
+  let particles = [];
+  function spawnParticles(energy){
+    const count = Math.floor(energy * 3);
+    for(let i = 0; i < count; i++){
+      const side = Math.floor(Math.random() * 4);
+      let x, y, vx, vy;
+      if(side === 0){ x = Math.random()*WRAP_SIZE; y = MARGIN; vx=(Math.random()-0.5)*0.6; vy=-Math.random()*1.6-0.4; }
+      else if(side === 1){ x = WRAP_SIZE-MARGIN; y = Math.random()*WRAP_SIZE; vx=Math.random()*1.6+0.4; vy=(Math.random()-0.5)*0.6; }
+      else if(side === 2){ x = Math.random()*WRAP_SIZE; y = WRAP_SIZE-MARGIN; vx=(Math.random()-0.5)*0.6; vy=Math.random()*1.6+0.4; }
+      else{ x = MARGIN; y = Math.random()*WRAP_SIZE; vx=-Math.random()*1.6-0.4; vy=(Math.random()-0.5)*0.6; }
+      particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2+1 });
+    }
+  }
+  function updateAndDrawParticles(){
+    vctx.shadowBlur = 0;
+    vctx.fillStyle = '#ffffff';
+    for(let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy;
+      p.life -= 0.012;
+      if(p.life <= 0){ particles.splice(i, 1); continue; }
+      vctx.globalAlpha = Math.max(0, p.life);
+      vctx.beginPath();
+      vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      vctx.fill();
+    }
+    vctx.globalAlpha = 1;
+  }
+
   function drawFrame(rawData){
-    const data = resample(rawData, BARS_PER_SIDE);
+    let data = resample(rawData, BARS_PER_SIDE);
+    data = normalizeSpectrum(data);
+    data = smoothArray(data);
+
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
 
-    const step = SQUARE_SIZE / BARS_PER_SIDE;
     const gap = 1.4;
-    const barW = Math.max(1, step - gap);
+    const barW = Math.max(1, BASE_STEP - gap);
     const maxLen = MARGIN - 6;
     const radius = barW / 2;
 
     const grad = vctx.createLinearGradient(0, 0, WRAP_SIZE, WRAP_SIZE);
-    grad.addColorStop(0, currentVizColors[0]);
-    grad.addColorStop(1, currentVizColors[1]);
+    grad.addColorStop(0, rgbStr(currentVizColors[0]));
+    grad.addColorStop(1, rgbStr(currentVizColors[1]));
     vctx.fillStyle = grad;
+    vctx.shadowColor = rgbaStr(currentGlowColor, .9);
+    vctx.shadowBlur = 14;
 
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const v = data[i] / 255;
-      const len = Math.max(2, v * maxLen);
-      const posAlongSide = MARGIN + i * step + gap / 2;
+      const posAlong = MARGIN - BASE_STEP / 2 + i * BASE_STEP;
+      const vTopRight = data[i];
+      const vBottomLeft = data[BARS_PER_SIDE - 1 - i];
 
-      roundedBar(posAlongSide, MARGIN - len, barW, len, radius);                 // верх
-      roundedBar(posAlongSide, MARGIN + SQUARE_SIZE, barW, len, radius);         // низ
-      roundedBar(MARGIN - len, posAlongSide, len, barW, radius);                 // лево
-      roundedBar(MARGIN + SQUARE_SIZE, posAlongSide, len, barW, radius);         // право
+      let len = Math.max(2, vTopRight * maxLen);
+      roundedBar(posAlong, MARGIN - len, barW, len, radius);                 // верх
+      roundedBar(MARGIN + SQUARE_SIZE, posAlong, len, barW, radius);         // право
+
+      len = Math.max(2, vBottomLeft * maxLen);
+      roundedBar(posAlong, MARGIN + SQUARE_SIZE, barW, len, radius);         // низ (инверт.)
+      roundedBar(MARGIN - len, posAlong, len, barW, radius);                 // лево (инверт.)
     }
+
+    const energy = data.reduce(function(a,b){ return a+b; }, 0) / data.length;
+    spawnParticles(energy);
+    updateAndDrawParticles();
   }
 
   function startVisualizer(){
@@ -1051,6 +1143,7 @@
   function stopVisualizer(){
     if(rafId) cancelAnimationFrame(rafId);
     rafId = null;
+    particles = [];
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
   }
 
@@ -1115,7 +1208,6 @@
     fairnessModal.classList.remove('visible');
     openNameModal();
   });
-
   document.getElementById('nameCancel').addEventListener('click', function(){
     nameModal.classList.remove('visible');
   });
@@ -1140,9 +1232,7 @@
     const full = name + ' ' + buildAnswerString();
     try{
       await submitToGoogleForm(full);
-    }catch(err){
-      // no-cors: подробностей об ошибке не будет, отправку считаем выполненной
-    }
+    }catch(err){}
     nameModal.classList.remove('visible');
     nameInput.value = '';
     showToast('Ответы отправлены! Спасибо, ' + name + '.');
@@ -1154,7 +1244,7 @@
   });
 
   /* ==========================================================
-     ПОДСКАЗКА И МОДАЛЬНОЕ ОКНО ПРАВИЛ
+     ПОДСКАЗКА И МОДАЛЬНЫЕ ОКНА
      ========================================================== */
   const rulesModal = document.getElementById('rulesModal');
   document.getElementById('helpIcon').addEventListener('click', function(){
@@ -1190,11 +1280,7 @@
       poolBuffer.appendChild(chip);
       ids.push(i);
     }
-
-    for(let i = ids.length - 1; i > 0; i--){
-      const j = Math.floor(Math.random() * (i + 1));
-      const tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
-    }
+    // порядок в пуле — по номерам, без перемешивания
     poolOrder = ids;
 
     refreshPoolRender();
