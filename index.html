@@ -9,6 +9,10 @@
 
   /* ==========================================================
      ТОКЕНЫ ОФОРМЛЕНИЯ
+     Цвета участников хранятся как RGB-тройки (без rgb()),
+     чтобы можно было использовать их и как непрозрачный цвет
+     (rgb(var(--zc))), и как полупрозрачную заливку при наведении
+     (rgba(var(--zc), .1)).
      ========================================================== */
   :root{
     --stage-bg:#232327;
@@ -20,19 +24,17 @@
     --text-muted:#a3a3aa;
     --accent:#f2b134;
     --accent-ink:#1c1c1f;
-    --viz-a:#6c63ff;
-    --viz-b:#38e8e0;
 
-    --p1:#ff0000; /* Тимур   rgb(255,0,0) — задано явно */
-    --p2:#ff8c1a; /* Коля    */
-    --p3:#ffd23f; /* Андрей  */
-    --p4:#5cb85c; /* Юра     */
-    --p5:#2ec4ff; /* Вася    */
-    --p6:#4267ff; /* Дима    */
-    --p7:#a259ff; /* Никита  */
-    --p8:#ff4fa3; /* Артём   */
-    --p9:#14b8a6; /* Альп    */
-    --p10:#5c5c63; /* резерв — участника пока нет */
+    --p1:255,0,0;     /* Тимур  */
+    --p2:255,0,228;   /* Коля   */
+    --p3:0,255,210;   /* Андрей */
+    --p4:255,162,0;   /* Юра    */
+    --p5:106,140,171; /* Вася   */
+    --p6:252,255,0;   /* Дима   */
+    --p7:6,0,255;     /* Никита */
+    --p8:0,180,255;   /* Артём  */
+    --p9:48,29,111;   /* Альп   */
+    --p10:92,92,99;   /* резерв — участника пока нет */
   }
 
   *{ box-sizing:border-box; }
@@ -51,17 +53,15 @@
   img{ -webkit-user-drag:none; user-drag:none; }
 
   /* ==========================================================
-     СЦЕНА — виртуальный холст 2560×1440, который целиком
-     масштабируется под реальный экран пользователя.
-     Масштаб подбирается так, чтобы холст ВСЕГДА заполнял окно
-     целиком по обеим осям (без чёрных полос); привязка к верху,
-     поэтому если что-то и обрежется — то небольшой запас снизу,
-     а не важные элементы сверху.
+     СЦЕНА — виртуальный холст 2560×1240, целиком масштабируется
+     под экран пользователя так, чтобы всегда заполнять окно
+     по обеим осям (без чёрных полос по бокам); привязка к верху,
+     поэтому если что-то и обрежется — то небольшой запас снизу.
      ========================================================== */
   #stage{
     position:fixed;
     left:50%; top:0;
-    width:2560px; height:1440px;
+    width:2560px; height:1240px;
     background:var(--stage-bg);
     transform-origin:top center;
   }
@@ -96,7 +96,7 @@
 
   /* ---------- левая половина: плеер + визуализация по периметру ---------- */
   .player-wrap{
-    position:absolute; left:130px; top:210px;
+    position:absolute; left:130px; top:50px;
     width:1020px; height:1020px;
   }
   #vizCanvas{
@@ -112,15 +112,17 @@
     overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     background:rgba(255,255,255,.02);
-    transition:background .15s, box-shadow .3s;
+    transition:background .15s, border-color .2s, border-radius .2s;
     z-index:2;
   }
   .square-zone:hover:not(.playing),
   .square-zone.dragover:not(.playing){
     background:rgba(255,255,255,.09);
   }
-  .square-zone.playing{
-    box-shadow:inset 0 0 0 3px rgba(108,99,255,.15);
+  /* когда трек загружен — квадрат без скруглений и без пунктира */
+  .square-zone.has-track{
+    border-radius:0;
+    border-color:transparent;
   }
   .square-placeholder{
     font-family:'Unbounded',sans-serif;
@@ -134,50 +136,45 @@
   }
   .square-zone.has-track .square-placeholder{ display:none; }
 
-  .replay-overlay{
-    position:absolute; inset:0;
-    display:none;
-    align-items:center; justify-content:center;
-    cursor:pointer;
-    z-index:5;
+  /* трек, находящийся в плеере — полностью заполняет квадрат, без скруглений */
+  .square-zone > .chip{
+    width:100%; height:100%;
+    border-radius:0;
   }
-  .square-zone.show-replay .replay-overlay{ display:flex; }
-  .replay-circle{
-    width:200px; height:200px;
-    border-radius:50%;
-    background:rgba(0,0,0,.5);
-    display:flex; align-items:center; justify-content:center;
-    transition:background .15s, transform .15s;
-  }
-  .replay-overlay:hover .replay-circle{ background:rgba(0,0,0,.65); transform:scale(1.05); }
-  .replay-circle img{ width:155px; height:155px; }
 
-  /* ---------- транспорт: play/pause + громкость ---------- */
-  .transport{
-    position:absolute; left:463px; top:1250px;
-    width:354px; height:70px;
-    display:flex; align-items:center; gap:24px;
+  /* ---------- управление плеером: прогресс, громкость, play/pause ---------- */
+  .player-controls{
+    position:absolute; left:220px; top:1094px;
+    width:840px;
+    display:flex; flex-direction:column; gap:18px;
     transition:opacity .2s;
   }
-  .transport.disabled{ opacity:.35; pointer-events:none; }
-  .play-pause-btn{
-    width:70px; height:70px;
-    border-radius:50%;
-    border:none;
+  .player-controls.disabled{ opacity:.35; pointer-events:none; }
+  .progress-track{
+    width:100%; height:8px;
+    border-radius:4px;
+    background:var(--border-neutral);
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%; width:0%;
+    background:#fff;
+    border-radius:4px;
+  }
+  .controls-row{
+    display:flex; align-items:center; justify-content:space-between;
+    height:64px;
+  }
+  .volume-pill{
+    display:flex; align-items:center; gap:12px;
     background:var(--surface);
-    cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    transition:background .15s, transform .15s;
-    padding:0;
+    border:1px solid var(--border-neutral);
+    border-radius:16px;
+    height:64px; width:300px;
+    padding:0 18px;
     flex:0 0 auto;
   }
-  .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.05); }
-  .play-pause-btn img{ width:30px; height:30px; }
-  .volume-group{
-    display:flex; align-items:center; gap:12px;
-    flex:1; min-width:0;
-  }
-  .volume-icon{ width:26px; height:26px; color:var(--text-muted); flex:0 0 auto; }
+  .volume-icon{ width:22px; height:22px; color:var(--text-muted); flex:0 0 auto; }
   .volume-slider{
     flex:1; -webkit-appearance:none; appearance:none;
     height:6px; border-radius:3px;
@@ -193,6 +190,25 @@
     width:18px; height:18px; border-radius:50%;
     background:var(--accent); border:none; cursor:pointer;
   }
+  .volume-pct{
+    width:46px; text-align:right;
+    font-variant-numeric:tabular-nums;
+    color:var(--text-muted); font-size:14px;
+    flex:0 0 auto;
+  }
+  .play-pause-btn{
+    width:64px; height:64px;
+    border-radius:16px;
+    border:1px solid var(--border-neutral);
+    background:var(--surface);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s, transform .15s;
+    padding:0;
+    flex:0 0 auto;
+  }
+  .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.04); }
+  .play-pause-btn img{ width:26px; height:26px; }
 
   /* ---------- фишки треков (переиспользуемый элемент) ---------- */
   .chip{
@@ -219,19 +235,13 @@
     pointer-events:none;
   }
 
-  /* трек, находящийся в плеере, полностью заполняет квадрат */
-  .square-zone > .chip{
-    width:100%; height:100%;
-    border-radius:0;
-  }
-
   /* ---------- правая половина ---------- */
   .zones-container{
-    position:absolute; left:1350px; top:132px;
-    width:1188px; height:975px;
+    position:absolute; left:1350px; top:50px;
+    width:1148px; height:935px;
     border:3px solid var(--border-strong);
     border-radius:28px;
-    padding:40px;
+    padding:20px;
   }
   .zones-grid{
     display:grid;
@@ -241,15 +251,15 @@
     width:100%; height:100%;
   }
   .zone{
-    --zc:#fff;
+    --zc:255,255,255;
     position:relative;
     width:544px; height:163px;
-    border:2px dashed var(--zc);
+    border:2px dashed rgb(var(--zc));
     border-radius:16px;
     background:rgba(255,255,255,.02);
     transition:background .15s;
   }
-  .zone:hover, .zone.dragover{ background:rgba(255,255,255,.08); }
+  .zone:hover, .zone.dragover{ background:rgba(var(--zc), .10); }
   .zone.zone-empty{ opacity:.5; }
   .zone.zone-empty:hover{ background:rgba(255,255,255,.02); }
   .zone-label{
@@ -257,7 +267,7 @@
     font-family:'Unbounded',sans-serif;
     font-size:17px;
     font-weight:600;
-    color:var(--zc);
+    color:rgb(var(--zc));
   }
   .zone-label.muted{ color:var(--text-muted); font-style:italic; font-weight:500; }
   .zone-content{
@@ -268,10 +278,12 @@
   }
   .zone-content::-webkit-scrollbar{ width:6px; }
   .zone-content::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.2); border-radius:3px; }
+  .zone-content .chip.drop-target-before{ box-shadow:-3px 0 0 0 var(--accent); }
+  .zone-content .chip.drop-target-after{ box-shadow:3px 0 0 0 var(--accent); }
 
   /* ---------- пул треков ---------- */
   .pool-container{
-    position:absolute; left:1350px; top:1127px;
+    position:absolute; left:1350px; top:1005px;
     width:960px; height:180px;
     border:2px solid var(--border-neutral);
     border-radius:20px;
@@ -294,9 +306,9 @@
   }
   .pool-plus:hover{ background:#3a3a40; transform:scale(1.04); }
 
-  /* ---------- кнопка «Ваши ответы» ---------- */
-  .copy-btn{
-    position:absolute; left:2330px; top:1127px;
+  /* ---------- кнопка «Отправить ответы» ---------- */
+  .submit-btn{
+    position:absolute; left:2330px; top:1005px;
     width:190px; height:180px;
     border-radius:20px;
     background:var(--surface-2);
@@ -306,9 +318,9 @@
     cursor:pointer;
     transition:border-color .15s, transform .15s, background .15s;
   }
-  .copy-btn:hover{ border-color:var(--accent); background:#222225; transform:translateY(-2px); }
-  .copy-btn img{ width:64px; height:64px; }
-  .copy-btn span{
+  .submit-btn:hover{ border-color:var(--accent); background:#222225; transform:translateY(-2px); }
+  .submit-btn svg{ color:var(--text-primary); }
+  .submit-btn span{
     font-family:'Unbounded',sans-serif;
     font-size:15px; font-weight:600;
     text-align:center;
@@ -331,7 +343,7 @@
   }
 
   /* ==========================================================
-     МОДАЛЬНОЕ ОКНО ПРАВИЛ (вне сцены — всегда читаемо)
+     МОДАЛЬНЫЕ ОКНА (вне сцены — всегда читаемы)
      ========================================================== */
   .modal-backdrop{
     position:fixed; inset:0;
@@ -356,13 +368,24 @@
     font-size:26px;
   }
   .modal-card p{ line-height:1.6; color:var(--text-muted); }
-  .modal-close{
-    display:inline-block; margin-top:20px;
-    background:var(--accent); color:var(--accent-ink);
+  .modal-actions{ display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; }
+  .modal-btn{
     border:none; border-radius:10px;
     padding:10px 22px;
     font-family:'Manrope',sans-serif; font-weight:700; font-size:15px;
     cursor:pointer;
+  }
+  .modal-btn.primary{ background:var(--accent); color:var(--accent-ink); }
+  .modal-btn.secondary{ background:transparent; color:var(--text-primary); border:1px solid var(--border-neutral); }
+  .name-input{
+    width:100%; margin-top:16px;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid var(--border-neutral);
+    background:var(--surface-2);
+    color:var(--text-primary);
+    font-family:'Manrope',sans-serif; font-size:16px;
+    user-select:text;
   }
 
   /* ==========================================================
@@ -378,6 +401,8 @@
     opacity:0; pointer-events:none;
     transition:opacity .25s, transform .25s;
     z-index:400;
+    max-width:80vw;
+    text-align:center;
   }
   #toast.visible{ opacity:1; transform:translate(-50%, 0); }
 </style>
@@ -399,23 +424,24 @@
     <canvas id="vizCanvas"></canvas>
     <div class="square-zone" id="squareZone">
       <div class="square-placeholder">Перетащите,<br>чтобы послушать</div>
-      <div class="replay-overlay" id="replayOverlay">
-        <div class="replay-circle"><img src="ui/play.png" alt="Слушать ещё раз" draggable="false"></div>
-      </div>
     </div>
   </div>
 
-  <div class="transport disabled" id="transport">
-    <button class="play-pause-btn" id="playPauseBtn" type="button">
-      <img id="playPauseIcon" src="ui/play.png" alt="Play/Pause" draggable="false">
-    </button>
-    <div class="volume-group">
-      <svg class="volume-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor"/>
-        <path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        <path d="M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-      </svg>
-      <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="1">
+  <div class="player-controls disabled" id="playerControls">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="controls-row">
+      <div class="volume-pill">
+        <svg class="volume-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 9v6h4l5 5V4L8 9H4z" fill="currentColor"/>
+          <path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M19 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="1">
+        <span class="volume-pct" id="volumePct">100%</span>
+      </div>
+      <button class="play-pause-btn" id="playPauseBtn" type="button">
+        <img id="playPauseIcon" src="ui/play.png" alt="Play/Pause" draggable="false">
+      </button>
     </div>
   </div>
 
@@ -429,9 +455,11 @@
     <div class="pool-plus" id="poolPlus">+0</div>
   </div>
 
-  <div class="copy-btn" id="copyBtn">
-    <img src="ui/copy.png" alt="Копировать" draggable="false">
-    <span>Ваши ответы</span>
+  <div class="submit-btn" id="submitBtn">
+    <svg viewBox="0 0 24 24" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M3 11.5L21 3l-8.5 18-2.2-7.3L3 11.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <span>Отправить ответы</span>
   </div>
 
 </div>
@@ -440,7 +468,32 @@
   <div class="modal-card">
     <h2>Правила</h2>
     <p>Здесь появится текст правил. Замените этот плейсхолдер своим текстом в файле index.html (блок с id="rulesModal").</p>
-    <button class="modal-close" id="modalClose">Понятно</button>
+    <div class="modal-actions">
+      <button class="modal-btn primary" id="rulesClose">Понятно</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="fairnessModal">
+  <div class="modal-card">
+    <h2>Проверьте распределение</h2>
+    <p id="fairnessText"></p>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" id="fairnessCancel">Вернуться и исправить</button>
+      <button class="modal-btn primary" id="fairnessProceed">Отправить всё равно</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="nameModal">
+  <div class="modal-card">
+    <h2>Ваше имя</h2>
+    <p>Введите имя, чтобы можно было посчитать правильные ответы и сообщить вам результат.</p>
+    <input type="text" id="nameInput" class="name-input" placeholder="Например, Тимур" maxlength="40">
+    <div class="modal-actions">
+      <button class="modal-btn secondary" id="nameCancel">Отмена</button>
+      <button class="modal-btn primary" id="nameSubmitBtn">Отправить</button>
+    </div>
   </div>
 </div>
 
@@ -462,17 +515,19 @@
   const ZONE_NAMES  = ['Тимур','Коля','Андрей','Юра','Вася','Дима','Никита','Артём','Альп', null];
   const ZONE_COLORS = ['var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--p5)','var(--p6)','var(--p7)','var(--p8)','var(--p9)','var(--p10)'];
 
+  // Google-форма для приёма ответов
+  const GOOGLE_FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSeeL3Qk6PUrViR5eoiaeZ-LCiy62tj3XXP6igKXWE0NTl11hw/formResponse';
+  const GOOGLE_FORM_FIELD  = 'entry.2025397665';
+
   const POOL_VISIBLE      = 5;
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
+  const ZONE_ROW_CAP      = 8;   // сколько треков помещается в одну строку зоны
 
-  const STAGE_W = 2560, STAGE_H = 1440;
+  const STAGE_W = 2560, STAGE_H = 1240;
 
   /* ==========================================================
      МАСШТАБИРОВАНИЕ СЦЕНЫ ПОД ЭКРАН ПОЛЬЗОВАТЕЛЯ
-     Заполняем окно целиком (без чёрных полос по бокам);
-     если пропорции окна отличаются от 2560×1440 — обрежется
-     небольшой запас снизу, а не по бокам.
      ========================================================== */
   const stageEl = document.getElementById('stage');
   function scaleStage(){
@@ -489,7 +544,7 @@
   const chipsById = new Map();
   let poolOrder = [];          // id треков, ещё не распределённых и не в плеере
   let poolPage = 0;
-  const zoneAssignments = {};  // {1:[id,...], ..., 9:[...]}
+  const zoneAssignments = {};  // {1:[id,...], ..., 9:[...]}  порядок = порядок отображения
   let squareTrackId = null;
 
   const poolBuffer = document.createElement('div');
@@ -519,10 +574,6 @@
 
   /* ==========================================================
      ФИКСИРОВАННЫЙ «ПРИЗРАК» ПЕРЕТАСКИВАНИЯ (всегда 115×115)
-     Не даём браузеру рисовать превью в текущем размере элемента
-     (иначе трек, вытащенный из огромного плеера, «летел бы»
-     гигантской иконкой) — вместо этого всегда показываем
-     заранее подготовленную картинку нужного размера.
      ========================================================== */
   const dragGhost = document.createElement('div');
   dragGhost.style.position = 'fixed';
@@ -568,6 +619,36 @@
     });
     chip.addEventListener('dragend', function(){
       chip.classList.remove('dragging');
+    });
+
+    // Позволяет бросить один трек ПРЯМО НА другой — для перестановки
+    // внутри зоны (или для замены трека в плеере/возврата в пул).
+    chip.addEventListener('dragover', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    chip.addEventListener('drop', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const draggedIdStr = e.dataTransfer.getData('text/plain');
+      if(!draggedIdStr) return;
+      const draggedId = Number(draggedIdStr);
+      const targetId = Number(chip.dataset.id);
+      if(draggedId === targetId) return;
+
+      const zoneEl = chip.closest('.zone');
+      if(zoneEl){
+        const z = Number(zoneEl.dataset.zone);
+        const rect = chip.getBoundingClientRect();
+        const before = (e.clientX - rect.left) < rect.width / 2;
+        moveTrackToZoneAt(draggedIdStr, z, targetId, before);
+        return;
+      }
+      if(chip.closest('.square-zone')){
+        moveTrackTo(draggedIdStr, 'square');
+        return;
+      }
+      moveTrackTo(draggedIdStr, 'pool');
     });
 
     return chip;
@@ -621,6 +702,8 @@
     }
   }
 
+  // До 8 треков — одна строка (иконки сжимаются по ширине).
+  // 9-16 — две строки. Больше — те же размеры, что для 16, и скролл.
   function resizeZoneIcons(z){
     const contentEl = zoneContentEls[z];
     const ids = zoneAssignments[z];
@@ -628,12 +711,17 @@
     if(n === 0) return;
     const W = contentEl.offsetWidth;
     const H = contentEl.offsetHeight;
-    let s = DEFAULT_ZONE_ICON;
-    while(s > MIN_ZONE_ICON){
-      const cols = Math.max(1, Math.floor(W / s));
-      const rows = Math.max(1, Math.floor(H / s));
-      if(cols * rows >= n) break;
-      s -= 1;
+    const gap = 4;
+    let s;
+    if(n <= ZONE_ROW_CAP){
+      const perRow = n;
+      const widthFit = Math.floor((W - (perRow - 1) * gap) / perRow);
+      s = Math.min(DEFAULT_ZONE_ICON, widthFit);
+    } else {
+      const perRow = ZONE_ROW_CAP;
+      const widthFit = Math.floor((W - (perRow - 1) * gap) / perRow);
+      const heightFit = Math.floor((H - gap) / 2);
+      s = Math.min(DEFAULT_ZONE_ICON, widthFit, heightFit);
     }
     if(s < MIN_ZONE_ICON) s = MIN_ZONE_ICON;
     ids.forEach(function(id){
@@ -686,10 +774,10 @@
      ЗОНА ПЛЕЕРА (КВАДРАТ)
      ========================================================== */
   const squareZone = document.getElementById('squareZone');
-  const replayOverlay = document.getElementById('replayOverlay');
-  const transportEl = document.getElementById('transport');
+  const playerControls = document.getElementById('playerControls');
   const playPauseBtn = document.getElementById('playPauseBtn');
   const playPauseIcon = document.getElementById('playPauseIcon');
+  const progressFill = document.getElementById('progressFill');
 
   squareZone.addEventListener('dragenter', function(e){ e.preventDefault(); squareZone.classList.add('dragover'); });
   squareZone.addEventListener('dragover', function(e){ e.preventDefault(); });
@@ -701,21 +789,17 @@
     if(id !== '') moveTrackTo(id, 'square');
   });
 
-  function updateTransportState(){
-    transportEl.classList.toggle('disabled', squareTrackId === null);
+  function updatePlayerControlsState(){
+    playerControls.classList.toggle('disabled', squareTrackId === null);
   }
 
   /* ==========================================================
-     ПЕРЕМЕЩЕНИЕ ТРЕКА МЕЖДУ ЗОНАМИ (ЕДИНАЯ ТОЧКА ВХОДА)
+     ПЕРЕМЕЩЕНИЕ ТРЕКОВ
      ========================================================== */
-  function moveTrackTo(idStr, destType, destZone){
-    const id = Number(idStr);
-    if(!chipsById.has(id)) return;
-    if(destType === 'square' && squareTrackId === id) return; // уже там
 
+  // Убирает id из пула / любой зоны / плеера (общая часть перед вставкой в новое место)
+  function detachTrack(id){
     const chip = getChip(id);
-    // сбрасываем возможный инлайн-размер, оставшийся от предыдущего места —
-    // именно это раньше приводило к «неправильному» размеру после переноса
     chip.style.width = '';
     chip.style.height = '';
 
@@ -725,19 +809,30 @@
     for(const z in zoneAssignments){
       const arr = zoneAssignments[z];
       const i = arr.indexOf(id);
-      if(i > -1){
-        arr.splice(i, 1);
-        resizeZoneIcons(Number(z));
-      }
+      if(i > -1) arr.splice(i, 1);
     }
 
-    const wasInSquare = (squareTrackId === id);
-    if(wasInSquare && destType !== 'square'){
+    if(squareTrackId === id){
       audioEl.pause();
       squareTrackId = null;
-      squareZone.classList.remove('has-track', 'show-replay', 'playing');
-      updateTransportState();
+      squareZone.classList.remove('has-track', 'playing');
+      updatePlayerControlsState();
     }
+    return chip;
+  }
+
+  function moveTrackTo(idStr, destType, destZone){
+    const id = Number(idStr);
+    if(!chipsById.has(id)) return;
+    if(destType === 'square' && squareTrackId === id) return;
+
+    const touchedZones = new Set();
+    for(const z in zoneAssignments){
+      if(zoneAssignments[z].indexOf(id) > -1) touchedZones.add(Number(z));
+    }
+
+    const chip = detachTrack(id);
+    touchedZones.forEach(function(z){ if(z !== destZone) resizeZoneIcons(z); });
 
     if(destType === 'pool'){
       poolOrder.push(id);
@@ -745,13 +840,12 @@
 
     } else if(destType === 'square'){
       if(squareTrackId !== null && squareTrackId !== id){
-        poolOrder.push(squareTrackId); // прежний трек возвращается в пул
+        poolOrder.push(squareTrackId);
       }
       squareTrackId = id;
       squareZone.appendChild(chip);
       squareZone.classList.add('has-track');
-      squareZone.classList.remove('show-replay');
-      updateTransportState();
+      updatePlayerControlsState();
       refreshPoolRender();
       playTrack(id);
 
@@ -763,17 +857,66 @@
     }
   }
 
+  // Вставка трека в зону на конкретную позицию (перед/после targetId) — для перестановки
+  function moveTrackToZoneAt(idStr, destZone, targetId, before){
+    const id = Number(idStr);
+    if(!chipsById.has(id)) return;
+
+    const touchedZones = new Set();
+    for(const z in zoneAssignments){
+      if(zoneAssignments[z].indexOf(id) > -1) touchedZones.add(Number(z));
+    }
+
+    const chip = detachTrack(id);
+    touchedZones.forEach(function(z){ if(z !== destZone) resizeZoneIcons(z); });
+
+    const arr = zoneAssignments[destZone];
+    let targetIdx = arr.indexOf(targetId);
+    if(targetIdx === -1) targetIdx = arr.length;
+    const insertAt = before ? targetIdx : targetIdx + 1;
+    arr.splice(insertAt, 0, id);
+
+    const contentEl = zoneContentEls[destZone];
+    arr.forEach(function(tid){ contentEl.appendChild(getChip(tid)); });
+    resizeZoneIcons(destZone);
+    refreshPoolRender();
+  }
+
   /* ==========================================================
      АУДИО
      ========================================================== */
   const audioEl = new Audio();
   audioEl.volume = 1;
+  let currentVizColors = ['#6c63ff', '#38e8e0'];
+
+  function extractImageColors(imgSrc, callback){
+    const img = new Image();
+    img.onload = function(){
+      try{
+        const c = document.createElement('canvas');
+        c.width = 4; c.height = 4;
+        const cctx = c.getContext('2d');
+        cctx.drawImage(img, 0, 0, 4, 4);
+        const d = cctx.getImageData(0, 0, 4, 4).data;
+        const c1 = 'rgb(' + d[0] + ',' + d[1] + ',' + d[2] + ')';
+        const idx2 = 15 * 4;
+        const c2 = 'rgb(' + d[idx2] + ',' + d[idx2+1] + ',' + d[idx2+2] + ')';
+        callback([c1, c2]);
+      }catch(err){ callback(null); }
+    };
+    img.onerror = function(){ callback(null); };
+    img.src = imgSrc;
+  }
 
   function playTrack(id){
     ensureAudioGraph();
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
+    progressFill.style.width = '0%';
     audioEl.play().catch(function(err){ console.warn('Не удалось начать воспроизведение', err); });
+    extractImageColors(PICS_DIR + '/' + id + PIC_EXT, function(colors){
+      currentVizColors = colors || ['#6c63ff', '#38e8e0'];
+    });
   }
 
   function toggleReplayOrPause(){
@@ -786,13 +929,11 @@
       audioEl.pause();
     }
   }
-  replayOverlay.addEventListener('click', toggleReplayOrPause);
   playPauseBtn.addEventListener('click', toggleReplayOrPause);
 
   audioEl.addEventListener('play', function(){
     playPauseIcon.src = 'ui/pause.png';
     squareZone.classList.add('playing');
-    squareZone.classList.remove('show-replay');
     startVisualizer();
   });
   audioEl.addEventListener('pause', function(){
@@ -803,23 +944,32 @@
   audioEl.addEventListener('ended', function(){
     playPauseIcon.src = 'ui/play.png';
     squareZone.classList.remove('playing');
-    squareZone.classList.add('show-replay');
     stopVisualizer();
   });
+  audioEl.addEventListener('timeupdate', function(){
+    const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+    progressFill.style.width = pct + '%';
+  });
 
-  document.getElementById('volumeSlider').addEventListener('input', function(e){
-    audioEl.volume = parseFloat(e.target.value);
+  const volumeSlider = document.getElementById('volumeSlider');
+  const volumePct = document.getElementById('volumePct');
+  volumeSlider.addEventListener('input', function(e){
+    const v = parseFloat(e.target.value);
+    audioEl.volume = v;
+    volumePct.textContent = Math.round(v * 100) + '%';
   });
 
   /* ==========================================================
-     ВИЗУАЛИЗАЦИЯ ЧАСТОТ — рамка полос по всем 4 граням плеера
+     ВИЗУАЛИЗАЦИЯ ЧАСТОТ — рамка из 100 «палочек» на каждой грани,
+     все грани показывают один и тот же полный спектр (низкие →
+     высокие), сильно скруглённые концы, градиент по цветам обложки.
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
-  const WRAP_SIZE   = 1020;
-  const SQUARE_SIZE = 840;
-  const MARGIN      = (WRAP_SIZE - SQUARE_SIZE) / 2; // 90
-  const BARS_PER_SIDE = 16;
+  const WRAP_SIZE     = 1020;
+  const SQUARE_SIZE   = 840;
+  const MARGIN        = (WRAP_SIZE - SQUARE_SIZE) / 2; // 90
+  const BARS_PER_SIDE = 100;
 
   const vizCanvas = document.getElementById('vizCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -833,49 +983,57 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 128; // 64 бина = ровно по 16 на каждую из 4 граней
+      analyser.fftSize = 512; // 256 бинов — с запасом для ресемплинга в 100 столбиков
       sourceNode.connect(analyser);
       analyser.connect(audioCtx.destination);
     }
     if(audioCtx.state === 'suspended') audioCtx.resume();
   }
 
-  function drawFrame(data){
+  function resample(data, targetLen){
+    const out = new Uint8Array(targetLen);
+    const srcLen = data.length;
+    for(let i = 0; i < targetLen; i++){
+      out[i] = data[Math.floor(i * srcLen / targetLen)];
+    }
+    return out;
+  }
+
+  function roundedBar(x, y, w, h, r){
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    vctx.beginPath();
+    if(vctx.roundRect){
+      vctx.roundRect(x, y, w, h, r);
+    } else {
+      vctx.rect(x, y, w, h);
+    }
+    vctx.fill();
+  }
+
+  function drawFrame(rawData){
+    const data = resample(rawData, BARS_PER_SIDE);
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
+
     const step = SQUARE_SIZE / BARS_PER_SIDE;
-    const gap = 4;
-    const barW = step - gap;
+    const gap = 1.4;
+    const barW = Math.max(1, step - gap);
     const maxLen = MARGIN - 6;
+    const radius = barW / 2;
 
     const grad = vctx.createLinearGradient(0, 0, WRAP_SIZE, WRAP_SIZE);
-    grad.addColorStop(0, '#6c63ff');
-    grad.addColorStop(1, '#38e8e0');
+    grad.addColorStop(0, currentVizColors[0]);
+    grad.addColorStop(1, currentVizColors[1]);
     vctx.fillStyle = grad;
 
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      // верх — растёт вверх
-      let v = data[i] / 255;
-      let len = Math.max(2, v * maxLen);
-      let x = MARGIN + i * step + gap / 2;
-      vctx.fillRect(x, MARGIN - len, barW, len);
+      const v = data[i] / 255;
+      const len = Math.max(2, v * maxLen);
+      const posAlongSide = MARGIN + i * step + gap / 2;
 
-      // право — растёт вправо
-      v = data[BARS_PER_SIDE + i] / 255;
-      len = Math.max(2, v * maxLen);
-      let y = MARGIN + i * step + gap / 2;
-      vctx.fillRect(MARGIN + SQUARE_SIZE, y, len, barW);
-
-      // низ — растёт вниз
-      v = data[BARS_PER_SIDE * 2 + i] / 255;
-      len = Math.max(2, v * maxLen);
-      x = MARGIN + i * step + gap / 2;
-      vctx.fillRect(x, MARGIN + SQUARE_SIZE, barW, len);
-
-      // лево — растёт влево
-      v = data[BARS_PER_SIDE * 3 + i] / 255;
-      len = Math.max(2, v * maxLen);
-      y = MARGIN + i * step + gap / 2;
-      vctx.fillRect(MARGIN - len, y, len, barW);
+      roundedBar(posAlongSide, MARGIN - len, barW, len, radius);                 // верх
+      roundedBar(posAlongSide, MARGIN + SQUARE_SIZE, barW, len, radius);         // низ
+      roundedBar(MARGIN - len, posAlongSide, len, barW, radius);                 // лево
+      roundedBar(MARGIN + SQUARE_SIZE, posAlongSide, len, barW, radius);         // право
     }
   }
 
@@ -897,12 +1055,12 @@
   }
 
   /* ==========================================================
-     СТРОКА ОТВЕТОВ И КОПИРОВАНИЕ
+     СТРОКА ОТВЕТОВ
      ========================================================== */
   function buildAnswerString(){
     const parts = [];
     for(let z = 1; z <= 10; z++){
-      const ids = (zoneAssignments[z] || []).slice().sort(function(a,b){ return a-b; });
+      const ids = (zoneAssignments[z] || []).slice();
       parts.push(z + ':' + (ids.length ? ids.join(',') : '0'));
     }
     return parts.join(' ');
@@ -914,24 +1072,85 @@
     toastEl.textContent = msg;
     toastEl.classList.add('visible');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function(){ toastEl.classList.remove('visible'); }, 3000);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('visible'); }, 3500);
   }
 
-  document.getElementById('copyBtn').addEventListener('click', async function(){
-    const str = buildAnswerString();
-    try{
-      await navigator.clipboard.writeText(str);
-    }catch(e){
-      const ta = document.createElement('textarea');
-      ta.value = str;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try{ document.execCommand('copy'); }catch(e2){}
-      ta.remove();
+  /* ==========================================================
+     ОТПРАВКА ОТВЕТОВ
+     ========================================================== */
+  const fairnessModal = document.getElementById('fairnessModal');
+  const fairnessText  = document.getElementById('fairnessText');
+  const nameModal     = document.getElementById('nameModal');
+  const nameInput     = document.getElementById('nameInput');
+
+  function openNameModal(){
+    nameModal.classList.add('visible');
+    setTimeout(function(){ nameInput.focus(); }, 50);
+  }
+
+  document.getElementById('submitBtn').addEventListener('click', function(){
+    const unassigned = poolOrder.length + (squareTrackId !== null ? 1 : 0);
+    if(unassigned > 0){
+      showToast('Сначала распределите все треки — в пуле ещё остались нераспределённые.');
+      return;
     }
-    showToast('Ваши ответы скопированы, скиньте их организатору');
+
+    const unfair = [];
+    for(let z = 1; z <= 9; z++){
+      if(zoneAssignments[z].length <= 1) unfair.push(ZONE_NAMES[z-1]);
+    }
+    if(unfair.length > 0){
+      fairnessText.textContent = 'У участников (' + unfair.join(', ') + ') 0 или 1 трек. Постарайтесь распределить треки более равномерно — сейчас это не по правилам.';
+      fairnessModal.classList.add('visible');
+      return;
+    }
+
+    openNameModal();
+  });
+
+  document.getElementById('fairnessCancel').addEventListener('click', function(){
+    fairnessModal.classList.remove('visible');
+  });
+  document.getElementById('fairnessProceed').addEventListener('click', function(){
+    fairnessModal.classList.remove('visible');
+    openNameModal();
+  });
+
+  document.getElementById('nameCancel').addEventListener('click', function(){
+    nameModal.classList.remove('visible');
+  });
+
+  function submitToGoogleForm(fullString){
+    const body = new URLSearchParams();
+    body.append(GOOGLE_FORM_FIELD, fullString);
+    return fetch(GOOGLE_FORM_ACTION, {
+      method:'POST',
+      mode:'no-cors',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString()
+    });
+  }
+
+  async function doSubmit(){
+    const name = nameInput.value.trim();
+    if(!name){
+      showToast('Введите имя.');
+      return;
+    }
+    const full = name + ' ' + buildAnswerString();
+    try{
+      await submitToGoogleForm(full);
+    }catch(err){
+      // no-cors: подробностей об ошибке не будет, отправку считаем выполненной
+    }
+    nameModal.classList.remove('visible');
+    nameInput.value = '';
+    showToast('Ответы отправлены! Спасибо, ' + name + '.');
+  }
+
+  document.getElementById('nameSubmitBtn').addEventListener('click', doSubmit);
+  nameInput.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') doSubmit();
   });
 
   /* ==========================================================
@@ -941,11 +1160,13 @@
   document.getElementById('helpIcon').addEventListener('click', function(){
     rulesModal.classList.add('visible');
   });
-  document.getElementById('modalClose').addEventListener('click', function(){
+  document.getElementById('rulesClose').addEventListener('click', function(){
     rulesModal.classList.remove('visible');
   });
-  rulesModal.addEventListener('click', function(e){
-    if(e.target === rulesModal) rulesModal.classList.remove('visible');
+  [rulesModal, fairnessModal, nameModal].forEach(function(modal){
+    modal.addEventListener('click', function(e){
+      if(e.target === modal) modal.classList.remove('visible');
+    });
   });
 
   /* ==========================================================
@@ -970,7 +1191,6 @@
       ids.push(i);
     }
 
-    // перемешиваем порядок появления в пуле — для динамичности от игры к игре
     for(let i = ids.length - 1; i > 0; i--){
       const j = Math.floor(Math.random() * (i + 1));
       const tmp = ids[i]; ids[i] = ids[j]; ids[j] = tmp;
