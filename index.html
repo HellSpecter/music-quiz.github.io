@@ -46,9 +46,12 @@
   img{ -webkit-user-drag:none; user-drag:none; }
 
   /* ==========================================================
-     СЦЕНА — виртуальный холст, масштабируется под экран так,
-     чтобы всегда заполнять окно по обеим осям (без чёрных полос),
-     с небольшим запасом (0.99), чтобы не вылезать за низ страницы.
+     СЦЕНА
+     Масштаб — БЕЗОПАСНЫЙ вариант (min): всегда без обрезания
+     контента. Почти всегда это даёт ровно 100% ширины экрана;
+     лишь если у пользователя очень мало места по высоте,
+     появится небольшой отступ по бокам — но зато ничего никогда
+     не уедет за нижний край.
      ========================================================== */
   #stage{
     position:fixed;
@@ -87,9 +90,19 @@
   .help-wrap:hover .help-tooltip{ opacity:1; transform:translateX(0); }
 
   /* ---------- левая половина: плеер + визуализация по периметру ---------- */
+  @keyframes playerFloat{
+    0%   { transform:translate(0,0); }
+    25%  { transform:translate(4px,-6px); }
+    50%  { transform:translate(-3px,-2px); }
+    75%  { transform:translate(-5px,4px); }
+    100% { transform:translate(0,0); }
+  }
   .player-wrap{
     position:absolute; left:150px; top:24px;
     width:980px; height:980px;
+  }
+  .player-wrap.floating{
+    animation:playerFloat 9s ease-in-out infinite;
   }
   #vizCanvas{
     position:absolute; inset:0;
@@ -132,7 +145,7 @@
     border-radius:0;
   }
 
-  /* ---------- управление плеером: прогресс, громкость, play/pause ---------- */
+  /* ---------- управление плеером ---------- */
   .player-controls{
     position:absolute; left:230px; top:1020px;
     width:820px;
@@ -200,7 +213,6 @@
     flex:0 0 auto;
   }
   .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.04); }
-  /* иконка play/pause принудительно белая, независимо от исходных цветов png */
   .play-pause-btn img{
     width:26px; height:26px;
     filter:brightness(0) saturate(100%) invert(1);
@@ -219,7 +231,7 @@
   }
   .chip:active{ cursor:grabbing; }
   .chip.dragging{ opacity:.35; }
-  .chip img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .chip img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; transform-origin:center; }
   .chip-num{
     position:absolute; right:4%; bottom:2%;
     font-family:'Manrope',sans-serif;
@@ -337,7 +349,7 @@
   }
 
   /* ==========================================================
-     МОДАЛЬНЫЕ ОКНА (вне сцены — всегда читаемы)
+     МОДАЛЬНЫЕ ОКНА
      ========================================================== */
   .modal-backdrop{
     position:fixed; inset:0;
@@ -383,7 +395,7 @@
   }
 
   /* ==========================================================
-     TOAST-УВЕДОМЛЕНИЕ
+     TOAST
      ========================================================== */
   #toast{
     position:fixed; left:50%; bottom:48px;
@@ -412,7 +424,7 @@
     <div class="help-tooltip">Чё делать?</div>
   </div>
 
-  <div class="player-wrap">
+  <div class="player-wrap" id="playerWrap">
     <canvas id="vizCanvas"></canvas>
     <div class="square-zone" id="squareZone">
       <div class="square-placeholder">Перетащите,<br>чтобы послушать</div>
@@ -512,15 +524,17 @@
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
   const ZONE_ROW_CAP      = 8;
+  const ZONE_WIDTH_SAFETY = 6; // запас в пикселях, чтобы иконки не переносились раньше времени из-за округления
 
   const STAGE_W = 2560, STAGE_H = 1150;
 
   /* ==========================================================
-     МАСШТАБИРОВАНИЕ СЦЕНЫ
+     МАСШТАБИРОВАНИЕ СЦЕНЫ — безопасный вариант (min), никогда
+     не даёт контенту уехать за пределы окна.
      ========================================================== */
   const stageEl = document.getElementById('stage');
   function scaleStage(){
-    const scale = Math.max(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H) * 0.99;
+    const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H) * 0.998;
     stageEl.style.transform = 'translateX(-50%) scale(' + scale + ')';
   }
   window.addEventListener('resize', scaleStage);
@@ -688,6 +702,9 @@
     }
   }
 
+  // До 8 треков — всегда одна строка (иконки сжимаются по ширине с запасом,
+  // чтобы не переноситься раньше времени из-за округления). 9-16 — две строки.
+  // Больше — размеры как для 16 и скролл.
   function resizeZoneIcons(z){
     const contentEl = zoneContentEls[z];
     const ids = zoneAssignments[z];
@@ -699,11 +716,11 @@
     let s;
     if(n <= ZONE_ROW_CAP){
       const perRow = n;
-      const widthFit = Math.floor((W - (perRow - 1) * gap) / perRow);
+      const widthFit = Math.floor((W - (perRow - 1) * gap - ZONE_WIDTH_SAFETY) / perRow);
       s = Math.min(DEFAULT_ZONE_ICON, widthFit);
     } else {
       const perRow = ZONE_ROW_CAP;
-      const widthFit = Math.floor((W - (perRow - 1) * gap) / perRow);
+      const widthFit = Math.floor((W - (perRow - 1) * gap - ZONE_WIDTH_SAFETY) / perRow);
       const heightFit = Math.floor((H - gap) / 2);
       s = Math.min(DEFAULT_ZONE_ICON, widthFit, heightFit);
     }
@@ -757,6 +774,7 @@
   /* ==========================================================
      ЗОНА ПЛЕЕРА
      ========================================================== */
+  const playerWrap = document.getElementById('playerWrap');
   const squareZone = document.getElementById('squareZone');
   const playerControls = document.getElementById('playerControls');
   const playPauseBtn = document.getElementById('playPauseBtn');
@@ -800,6 +818,8 @@
       squareTrackId = null;
       squareZone.classList.remove('has-track', 'playing');
       squareZone.style.boxShadow = 'none';
+      const oldImg = chip.querySelector('img');
+      if(oldImg) oldImg.style.transform = '';
       updatePlayerControlsState();
     }
     return chip;
@@ -871,7 +891,7 @@
   const audioEl = new Audio();
   audioEl.volume = 1;
 
-  let currentVizColors = [[108,99,255],[56,232,224]]; // rgb-тройки, по умолчанию до загрузки обложки
+  let currentVizColors = [[108,99,255],[56,232,224]];
   let currentGlowColor  = [170,165,255];
 
   function rgbStr(rgb){ return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')'; }
@@ -907,6 +927,7 @@
     const g1 = lighten(currentVizColors[0], 0.45);
     const g2 = lighten(currentVizColors[1], 0.45);
     currentGlowColor = g1;
+    // свечение вокруг самой обложки (остаётся, как и было)
     squareZone.style.boxShadow =
       '0 0 50px 8px ' + rgbaStr(g1, .35) + ', ' +
       '0 0 90px 20px ' + rgbaStr(g2, .20);
@@ -939,16 +960,19 @@
   audioEl.addEventListener('play', function(){
     playPauseIcon.src = 'ui/pause.png';
     squareZone.classList.add('playing');
+    playerWrap.classList.add('floating');
     startVisualizer();
   });
   audioEl.addEventListener('pause', function(){
     playPauseIcon.src = 'ui/play.png';
     squareZone.classList.remove('playing');
+    playerWrap.classList.remove('floating');
     stopVisualizer();
   });
   audioEl.addEventListener('ended', function(){
     playPauseIcon.src = 'ui/play.png';
     squareZone.classList.remove('playing');
+    playerWrap.classList.remove('floating');
     stopVisualizer();
   });
   audioEl.addEventListener('timeupdate', function(){
@@ -956,7 +980,6 @@
     progressFill.style.width = pct + '%';
   });
 
-  // перемотка кликом/протаскиванием по полоске прогресса
   function seekFromEvent(e){
     if(squareTrackId === null || !audioEl.duration) return;
     const rect = progressTrack.getBoundingClientRect();
@@ -978,20 +1001,21 @@
 
   /* ==========================================================
      ВИЗУАЛИЗАЦИЯ ЧАСТОТ
-     102 палочки на грань (первая/последняя слегка выступают за
-     угол — для плавного «опоясывания»), все грани показывают
-     один и тот же полный спектр; низ и лево — инвертированы,
-     чтобы низкие частоты «стекались» к правому нижнему углу.
-     Плюс нормализация/сглаживание спектра, свечение позади
-     палочек и немного «музыкальных» частиц.
+     101 палочка на грань (первая/последняя слегка выступают за
+     угол), все грани показывают полный спектр; низ и лево
+     инвертированы (низкие частоты — к правому нижнему углу).
+     Авто-нормализация (адаптивный «потолок» уровня) — картинка
+     всегда живая независимо от громкости; акцент по центру
+     каждой грани. Свечение — отдельным слоем позади (не красит
+     сами палочки). Плюс бас-зум обложки и частицы.
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
   const WRAP_SIZE     = 980;
   const SQUARE_SIZE   = 820;
   const MARGIN        = (WRAP_SIZE - SQUARE_SIZE) / 2; // 80
-  const BARS_PER_SIDE = 102;
-  const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2); // шаг рассчитан на 100 делений
+  const BARS_PER_SIDE = 101;
+  const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
 
   const vizCanvas = document.getElementById('vizCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -1006,7 +1030,7 @@
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.85;
+      analyser.smoothingTimeConstant = 0.8;
       sourceNode.connect(analyser);
       analyser.connect(audioCtx.destination);
     }
@@ -1022,18 +1046,28 @@
     return out;
   }
 
-  // компенсирует естественный спад высоких частот и подтягивает тихие сигналы,
-  // при этом басы остаются чуть заметнее верхних
+  // авто-потолок уровня — быстро подстраивается вверх на пиках,
+  // медленно опускается в тишине, поэтому картинка всегда живая
+  let agcCeiling = 40;
   function normalizeSpectrum(rawArr){
     const n = rawArr.length;
+    let frameMax = 0;
+    for(let i = 0; i < n; i++){ if(rawArr[i] > frameMax) frameMax = rawArr[i]; }
+    if(frameMax > agcCeiling){
+      agcCeiling += (frameMax - agcCeiling) * 0.35;
+    } else {
+      agcCeiling += (frameMax - agcCeiling) * 0.015;
+    }
+    if(agcCeiling < 18) agcCeiling = 18;
+
     const out = new Float32Array(n);
     for(let i = 0; i < n; i++){
-      let v = rawArr[i] / 255;
+      let v = rawArr[i] / agcCeiling;
       const t = i / (n - 1);
-      const boost = 1 + 1.7 * t;
-      v = Math.min(1, v * boost);
-      v = Math.pow(v, 0.55);
-      v = v * (1.12 - 0.12 * t);
+      const trebleBoost = 1 + 1.5 * t; // компенсация естественного спада высоких
+      v = Math.min(1.5, v * trebleBoost);
+      v = Math.pow(Math.min(1, v), 0.5); // мягкая гамма — подтягивает тихие сигналы
+      v = v * (1.1 - 0.1 * t); // басы всё ещё чуть заметнее верхних
       out[i] = Math.min(1, v);
     }
     return out;
@@ -1061,17 +1095,17 @@
     vctx.fill();
   }
 
-  // ---- частицы ----
+  // ---- частицы: летят дальше и гаснут плавнее ----
   let particles = [];
   function spawnParticles(energy){
-    const count = Math.floor(energy * 3);
+    const count = Math.floor(energy * 2.4);
     for(let i = 0; i < count; i++){
       const side = Math.floor(Math.random() * 4);
       let x, y, vx, vy;
-      if(side === 0){ x = Math.random()*WRAP_SIZE; y = MARGIN; vx=(Math.random()-0.5)*0.6; vy=-Math.random()*1.6-0.4; }
-      else if(side === 1){ x = WRAP_SIZE-MARGIN; y = Math.random()*WRAP_SIZE; vx=Math.random()*1.6+0.4; vy=(Math.random()-0.5)*0.6; }
-      else if(side === 2){ x = Math.random()*WRAP_SIZE; y = WRAP_SIZE-MARGIN; vx=(Math.random()-0.5)*0.6; vy=Math.random()*1.6+0.4; }
-      else{ x = MARGIN; y = Math.random()*WRAP_SIZE; vx=-Math.random()*1.6-0.4; vy=(Math.random()-0.5)*0.6; }
+      if(side === 0){ x=Math.random()*WRAP_SIZE; y=MARGIN; vx=(Math.random()-0.5)*1.0; vy=-Math.random()*3.2-1.0; }
+      else if(side === 1){ x=WRAP_SIZE-MARGIN; y=Math.random()*WRAP_SIZE; vx=Math.random()*3.2+1.0; vy=(Math.random()-0.5)*1.0; }
+      else if(side === 2){ x=Math.random()*WRAP_SIZE; y=WRAP_SIZE-MARGIN; vx=(Math.random()-0.5)*1.0; vy=Math.random()*3.2+1.0; }
+      else{ x=MARGIN; y=Math.random()*WRAP_SIZE; vx=-Math.random()*3.2-1.0; vy=(Math.random()-0.5)*1.0; }
       particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2+1 });
     }
   }
@@ -1081,9 +1115,10 @@
     for(let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
       p.x += p.vx; p.y += p.vy;
-      p.life -= 0.012;
+      p.vx *= 0.985; p.vy *= 0.985;
+      p.life -= 0.006;
       if(p.life <= 0){ particles.splice(i, 1); continue; }
-      vctx.globalAlpha = Math.max(0, p.life);
+      vctx.globalAlpha = Math.max(0, p.life * p.life); // плавное затухание к концу
       vctx.beginPath();
       vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       vctx.fill();
@@ -1091,10 +1126,32 @@
     vctx.globalAlpha = 1;
   }
 
+  // ---- лёгкий зум обложки на басах ----
+  let smoothedBass = 0;
+  function updateBassZoom(rawData){
+    const n = Math.min(10, rawData.length);
+    let sum = 0;
+    for(let i = 0; i < n; i++) sum += rawData[i];
+    const bassRaw = (sum / n) / 255;
+    smoothedBass += (bassRaw - smoothedBass) * 0.15;
+    const chipImg = squareZone.querySelector('.chip img');
+    if(chipImg){
+      chipImg.style.transform = 'scale(' + (1 + smoothedBass * 0.045).toFixed(4) + ')';
+    }
+  }
+
   function drawFrame(rawData){
-    let data = resample(rawData, BARS_PER_SIDE);
-    data = normalizeSpectrum(data);
-    data = smoothArray(data);
+    let norm = normalizeSpectrum(resample(rawData, BARS_PER_SIDE));
+    norm = smoothArray(norm);
+
+    // форма с акцентом по центру каждой грани + разводим на 2 пары граней
+    const sideA = new Float32Array(BARS_PER_SIDE); // верх + право
+    const sideB = new Float32Array(BARS_PER_SIDE); // низ + лево (инверт.)
+    for(let i = 0; i < BARS_PER_SIDE; i++){
+      const shape = 0.55 + 0.45 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
+      sideA[i] = norm[i] * shape;
+      sideB[i] = norm[BARS_PER_SIDE - 1 - i] * shape;
+    }
 
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
 
@@ -1103,30 +1160,44 @@
     const maxLen = MARGIN - 6;
     const radius = barW / 2;
 
+    // --- слой 1: свечение позади (не красит сами палочки) ---
+    let maxA = 0, maxB = 0;
+    for(let i = 0; i < BARS_PER_SIDE; i++){
+      if(sideA[i] > maxA) maxA = sideA[i];
+      if(sideB[i] > maxB) maxB = sideB[i];
+    }
+    vctx.shadowColor = rgbaStr(currentGlowColor, 1);
+    vctx.shadowBlur = 26;
+    vctx.fillStyle = rgbaStr(currentGlowColor, .5);
+    const glA = Math.max(6, maxA * maxLen * 0.9);
+    const glB = Math.max(6, maxB * maxLen * 0.9);
+    roundedBar(MARGIN, MARGIN - glA, SQUARE_SIZE, glA, glA / 2);               // верх
+    roundedBar(MARGIN + SQUARE_SIZE, MARGIN, glA, SQUARE_SIZE, glA / 2);       // право
+    roundedBar(MARGIN, MARGIN + SQUARE_SIZE, SQUARE_SIZE, glB, glB / 2);       // низ
+    roundedBar(MARGIN - glB, MARGIN, glB, SQUARE_SIZE, glB / 2);               // лево
+
+    // --- слой 2: сами палочки — чистый градиент, без тени ---
+    vctx.shadowBlur = 0;
     const grad = vctx.createLinearGradient(0, 0, WRAP_SIZE, WRAP_SIZE);
     grad.addColorStop(0, rgbStr(currentVizColors[0]));
     grad.addColorStop(1, rgbStr(currentVizColors[1]));
     vctx.fillStyle = grad;
-    vctx.shadowColor = rgbaStr(currentGlowColor, .9);
-    vctx.shadowBlur = 14;
 
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const posAlong = MARGIN - BASE_STEP / 2 + i * BASE_STEP;
-      const vTopRight = data[i];
-      const vBottomLeft = data[BARS_PER_SIDE - 1 - i];
-
-      let len = Math.max(2, vTopRight * maxLen);
-      roundedBar(posAlong, MARGIN - len, barW, len, radius);                 // верх
-      roundedBar(MARGIN + SQUARE_SIZE, posAlong, len, barW, radius);         // право
-
-      len = Math.max(2, vBottomLeft * maxLen);
-      roundedBar(posAlong, MARGIN + SQUARE_SIZE, barW, len, radius);         // низ (инверт.)
-      roundedBar(MARGIN - len, posAlong, len, barW, radius);                 // лево (инверт.)
+      const pos = MARGIN - BASE_STEP / 2 + i * BASE_STEP;
+      let len = Math.max(2, sideA[i] * maxLen);
+      roundedBar(pos, MARGIN - len, barW, len, radius);
+      roundedBar(MARGIN + SQUARE_SIZE, pos, len, barW, radius);
+      len = Math.max(2, sideB[i] * maxLen);
+      roundedBar(pos, MARGIN + SQUARE_SIZE, barW, len, radius);
+      roundedBar(MARGIN - len, pos, len, barW, radius);
     }
 
-    const energy = data.reduce(function(a,b){ return a+b; }, 0) / data.length;
+    const energy = norm.reduce(function(a,b){ return a+b; }, 0) / norm.length;
     spawnParticles(energy);
     updateAndDrawParticles();
+
+    updateBassZoom(rawData);
   }
 
   function startVisualizer(){
@@ -1280,8 +1351,7 @@
       poolBuffer.appendChild(chip);
       ids.push(i);
     }
-    // порядок в пуле — по номерам, без перемешивания
-    poolOrder = ids;
+    poolOrder = ids; // по порядку номеров, без перемешивания
 
     refreshPoolRender();
     loadingEl.style.display = 'none';
