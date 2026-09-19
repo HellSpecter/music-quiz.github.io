@@ -107,8 +107,8 @@
     pointer-events:none;
   }
   .square-zone{
-    position:absolute; left:110px; top:110px;
-    width:820px; height:820px;
+    position:absolute; left:140px; top:140px;
+    width:760px; height:760px;
     border:3px dashed var(--border-strong);
     border-radius:28px;
     overflow:hidden;
@@ -144,8 +144,8 @@
 
   /* ---------- управление плеером ---------- */
   .player-controls{
-    position:absolute; left:265px; top:1065px;
-    width:820px;
+    position:absolute; left:295px; top:1065px;
+    width:760px;
     display:flex; flex-direction:column; gap:8px;
     transition:opacity .2s;
   }
@@ -934,6 +934,7 @@
 
   function playTrack(id){
     ensureAudioGraph();
+    trackReady = false; // пока не пришли метаданные новой дорожки — перемотка запрещена
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
     progressFill.style.width = '0%';
@@ -955,6 +956,24 @@
     }
   }
   playPauseBtn.addEventListener('click', toggleReplayOrPause);
+
+  // Раньше здесь была ошибка: currentTime у переиспользуемого <audio>
+  // сбрасывается не мгновенно, и если перематывать СРАЗУ после запуска
+  // (особенно у длинных треков), браузер иногда пытался искать позицию
+  // ещё в незагруженных данных и «залипал». Теперь перемотка разрешена
+  // только после реального прихода метаданных новой дорожки.
+  let trackReady = false;
+  audioEl.addEventListener('loadedmetadata', function(){ trackReady = true; });
+  audioEl.addEventListener('error', function(){
+    // если аудио всё же «упало» — пробуем аккуратно перезапустить с той же позиции
+    if(squareTrackId === null) return;
+    const savedTime = audioEl.currentTime || 0;
+    const src = audioEl.src;
+    trackReady = false;
+    audioEl.src = src;
+    audioEl.currentTime = savedTime;
+    audioEl.play().catch(function(){});
+  });
 
   audioEl.addEventListener('play', function(){
     playPauseIcon.src = 'ui/pause.png';
@@ -980,14 +999,21 @@
   });
 
   function seekFromEvent(e){
-    if(squareTrackId === null || !audioEl.duration) return;
+    if(squareTrackId === null || !trackReady || !audioEl.duration || !isFinite(audioEl.duration)) return;
     const rect = progressTrack.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     audioEl.currentTime = ratio * audioEl.duration;
   }
   let scrubbing = false;
+  let lastSeekAt = 0;
   progressTrack.addEventListener('mousedown', function(e){ scrubbing = true; seekFromEvent(e); });
-  window.addEventListener('mousemove', function(e){ if(scrubbing) seekFromEvent(e); });
+  window.addEventListener('mousemove', function(e){
+    if(!scrubbing) return;
+    const now = performance.now();
+    if(now - lastSeekAt < 70) return; // не дёргаем currentTime слишком часто во время протаскивания
+    lastSeekAt = now;
+    seekFromEvent(e);
+  });
   window.addEventListener('mouseup', function(){ scrubbing = false; });
 
   const volumeSlider = document.getElementById('volumeSlider');
@@ -1013,8 +1039,8 @@
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
   const WRAP_SIZE     = 1040;
-  const SQUARE_SIZE   = 820;
-  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 110 — общая «атмосфера» вокруг квадрата
+  const SQUARE_SIZE   = 760;
+  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 140 — общая «атмосфера» вокруг квадрата
   const BAR_MARGIN    = 80;  // как далеко может вытягиваться сама чёткая палочка
   const BARS_PER_SIDE = 101;
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
@@ -1114,12 +1140,15 @@
     vctx.fill();
   }
 
-  // ---- частицы: медленные, летят далеко, гаснут и по времени, и по расстоянию ----
+  // ---- частицы: летят от края квадрата и гаснут по мере УДАЛЕНИЯ ОТ ТОЧКИ
+  // СВОЕГО ВЫЛЕТА (раньше ошибочно считалось расстояние от центра всего
+  // холста — а точка вылета и так уже почти у края, поэтому угасание
+  // начиналось практически сразу же после рождения частицы) ----
   let particles = [];
   function spawnParticles(energy){
-    // дробная скорость появления частиц: floor() раньше почти всегда
-    // округлял до нуля, поэтому частицы никогда не создавались
-    const rate = energy * 3.2 + 0.08; // небольшая базовая «жизнь» даже в тишине
+    // дробная скорость появления, без «базового шума» — частицы есть
+    // только когда реально что-то играет
+    const rate = energy * 3.2;
     let count = Math.floor(rate);
     if(Math.random() < (rate - count)) count++;
     for(let i = 0; i < count; i++){
@@ -1129,10 +1158,10 @@
       else if(side === 1){ x=WRAP_SIZE-EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=Math.random()*1.3+0.4; vy=(Math.random()-0.5)*0.5; }
       else if(side === 2){ x=Math.random()*WRAP_SIZE; y=WRAP_SIZE-EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=Math.random()*1.3+0.4; }
       else{ x=EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=-Math.random()*1.3-0.4; vy=(Math.random()-0.5)*0.5; }
-      particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2+1 });
+      particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2.2+1.6, startX:x, startY:y });
     }
   }
-  const PARTICLE_MAX_DIST = CENTER; // расстояние от центра до края холста
+  const PARTICLE_MAX_TRAVEL = EFFECT_MARGIN - 6; // почти всё доступное пространство до края холста
   function updateAndDrawParticles(){
     vctx.shadowBlur = 0;
     vctx.fillStyle = '#ffffff';
@@ -1140,11 +1169,11 @@
       const p = particles[i];
       p.x += p.vx; p.y += p.vy;
       p.vx *= 0.99; p.vy *= 0.99;
-      p.life -= 0.0045;
-      const dist = Math.hypot(p.x - CENTER, p.y - CENTER);
-      const distFade = 1 - smoothstep(PARTICLE_MAX_DIST * 0.5, PARTICLE_MAX_DIST * 0.95, dist);
-      const alpha = Math.max(0, p.life) * distFade;
-      if(p.life <= 0 || dist > PARTICLE_MAX_DIST * 0.98 || alpha <= 0.01){
+      p.life -= 0.0035;
+      const traveled = Math.hypot(p.x - p.startX, p.y - p.startY);
+      const distFade = 1 - smoothstep(PARTICLE_MAX_TRAVEL * 0.55, PARTICLE_MAX_TRAVEL, traveled);
+      const alpha = Math.min(1, Math.max(0, p.life) * distFade * 1.5); // заметнее, чем раньше
+      if(p.life <= 0 || traveled >= PARTICLE_MAX_TRAVEL || alpha <= 0.015){
         particles.splice(i, 1);
         continue;
       }
@@ -1154,19 +1183,29 @@
       vctx.fill();
     }
     vctx.globalAlpha = 1;
+
   }
 
-  // ---- лёгкий зум обложки на басах ----
-  let smoothedBass = 0;
+  // ---- зум обложки на басах: реагирует на УДАРЫ (превышение над
+  // недавним средним уровнем баса), а не на абсолютную громкость —
+  // раньше он почти сразу вылетал в максимум и там и оставался,
+  // т.к. бас в миксе присутствует почти постоянно ----
+  let bassAvg = 0;
+  let bassPulse = 0;
   function updateBassZoom(rawData){
     const n = Math.min(10, rawData.length);
     let sum = 0;
     for(let i = 0; i < n; i++) sum += rawData[i];
     const bassRaw = (sum / n) / 255;
-    smoothedBass += (bassRaw - smoothedBass) * 0.15;
+
+    bassAvg += (bassRaw - bassAvg) * 0.02; // медленное «фоновое» среднее
+    const kick = Math.max(0, bassRaw - bassAvg) * 2.4; // насколько бас СЕЙЧАС выше фона — это и есть удар
+    bassPulse += (kick - bassPulse) * 0.28;
+
     const chipImg = squareZone.querySelector('.chip img');
     if(chipImg){
-      chipImg.style.transform = 'scale(' + (1 + smoothedBass * 0.085).toFixed(4) + ')';
+      const scale = 1 + Math.min(0.045, bassPulse * 0.045);
+      chipImg.style.transform = 'scale(' + scale.toFixed(4) + ')';
     }
   }
 
@@ -1174,12 +1213,12 @@
     let norm = normalizeSpectrum(resample(rawData, BARS_PER_SIDE));
     norm = smoothArray(norm);
 
-    const sideA = new Float32Array(BARS_PER_SIDE); // верх + право
-    const sideB = new Float32Array(BARS_PER_SIDE); // низ + лево (инверт.)
+    const arrDirect   = new Float32Array(BARS_PER_SIDE); // низкие частоты — у первого индекса
+    const arrReversed = new Float32Array(BARS_PER_SIDE); // низкие частоты — у последнего индекса
     for(let i = 0; i < BARS_PER_SIDE; i++){
       const shape = 0.55 + 0.45 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
-      sideA[i] = norm[i] * shape;
-      sideB[i] = norm[BARS_PER_SIDE - 1 - i] * shape;
+      arrDirect[i]   = norm[i] * shape;
+      arrReversed[i] = norm[BARS_PER_SIDE - 1 - i] * shape;
     }
 
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
@@ -1188,6 +1227,9 @@
     const barW = Math.max(1, BASE_STEP - gap);
     const maxLen = BAR_MARGIN - 6;
     const radius = barW / 2;
+
+    // Верх: бас слева. Право: бас снизу. Низ: бас справа. Лево: бас сверху.
+    const topArr = arrDirect, rightArr = arrReversed, bottomArr = arrReversed, leftArr = arrDirect;
 
     // Один проход: у каждой палочки — тень (glow) её же цвета, только
     // светлее и полупрозрачнее. Т.к. это тень ЭТОЙ ЖЕ заливки, она
@@ -1202,11 +1244,13 @@
       vctx.fillStyle = rgbStr(barColor);
 
       const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP;
-      let len = Math.max(2, sideA[i] * maxLen);
+      let len = Math.max(2, topArr[i] * maxLen);
       roundedBar(pos, EFFECT_MARGIN - len, barW, len, radius);
+      len = Math.max(2, rightArr[i] * maxLen);
       roundedBar(EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);
-      len = Math.max(2, sideB[i] * maxLen);
+      len = Math.max(2, bottomArr[i] * maxLen);
       roundedBar(pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);
+      len = Math.max(2, leftArr[i] * maxLen);
       roundedBar(EFFECT_MARGIN - len, pos, len, barW, radius);
     }
     vctx.shadowBlur = 0;
