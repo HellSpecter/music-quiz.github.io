@@ -1151,9 +1151,9 @@
       const side = Math.floor(Math.random() * 4);
       let x, y, vx, vy;
       if(side === 0){ x = Math.random()*WRAP_SIZE; y = MARGIN; vx=(Math.random()-0.5)*0.6; vy=-Math.random()*1.6-0.4; }
-      else if(side === 1){ x = WRAP_SIZE-MARGIN; y = Math.random()*WRAP_SIZE; vx=Math.random()*2.6+0.4; vy=(Math.random()-0.5)*0.6; }
+      else if(side === 1){ x = WRAP_SIZE-MARGIN; y = Math.random()*WRAP_SIZE; vx=Math.random()*1.6+0.4; vy=(Math.random()-0.5)*0.6; }
       else if(side === 2){ x = Math.random()*WRAP_SIZE; y = WRAP_SIZE-MARGIN; vx=(Math.random()-0.5)*0.6; vy=Math.random()*1.6+0.4; }
-      else{ x = MARGIN; y = Math.random()*WRAP_SIZE; vx=-Math.random()*2.6-0.4; vy=(Math.random()-0.5)*0.6; }
+      else{ x = MARGIN; y = Math.random()*WRAP_SIZE; vx=-Math.random()*1.6-0.4; vy=(Math.random()-0.5)*0.6; }
       particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2+1 });
     }
   }
@@ -1186,22 +1186,16 @@
   // недавним средним уровнем баса), а не на абсолютную громкость —
   // раньше он почти сразу вылетал в максимум и там и оставался,
   // т.к. бас в миксе присутствует почти постоянно ----
-  let bassAvg = 0;
-  let bassPulse = 0;
+  let smoothedBass = 0;
   function updateBassZoom(rawData){
     const n = Math.min(10, rawData.length);
     let sum = 0;
     for(let i = 0; i < n; i++) sum += rawData[i];
     const bassRaw = (sum / n) / 255;
-
-    bassAvg += (bassRaw - bassAvg) * 0.02; // медленное «фоновое» среднее
-    const kick = Math.max(0, bassRaw - bassAvg) * 2.4; // насколько бас СЕЙЧАС выше фона — это и есть удар
-    bassPulse += (kick - bassPulse) * 0.28;
-
+    smoothedBass += (bassRaw - smoothedBass) * 0.15;
     const chipImg = squareZone.querySelector('.chip img');
     if(chipImg){
-      const scale = 1 + Math.min(0.045, bassPulse * 0.045);
-      chipImg.style.transform = 'scale(' + scale.toFixed(4) + ')';
+      chipImg.style.transform = 'scale(' + (1 + smoothedBass * 0.045).toFixed(4) + ')';
     }
   }
 
