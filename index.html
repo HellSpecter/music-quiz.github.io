@@ -46,12 +46,7 @@
   img{ -webkit-user-drag:none; user-drag:none; }
 
   /* ==========================================================
-     СЦЕНА
-     Масштаб — БЕЗОПАСНЫЙ вариант (min): всегда без обрезания
-     контента. Почти всегда это даёт ровно 100% ширины экрана;
-     лишь если у пользователя очень мало места по высоте,
-     появится небольшой отступ по бокам — но зато ничего никогда
-     не уедет за нижний край.
+     СЦЕНА — безопасное масштабирование (min), без обрезания.
      ========================================================== */
   #stage{
     position:fixed;
@@ -90,27 +85,29 @@
   .help-wrap:hover .help-tooltip{ opacity:1; transform:translateX(0); }
 
   /* ---------- левая половина: плеер + визуализация по периметру ---------- */
+  /* лёгкое «плавание» плеера: смещение + едва заметные повороты */
   @keyframes playerFloat{
-    0%   { transform:translate(0,0); }
-    25%  { transform:translate(4px,-6px); }
-    50%  { transform:translate(-3px,-2px); }
-    75%  { transform:translate(-5px,4px); }
-    100% { transform:translate(0,0); }
+    0%   { transform:translate(0,0) rotate(0deg); }
+    20%  { transform:translate(4px,-5px) rotate(.6deg); }
+    45%  { transform:translate(-3px,-2px) rotate(-.5deg); }
+    70%  { transform:translate(-5px,4px) rotate(.4deg); }
+    90%  { transform:translate(2px,3px) rotate(-.3deg); }
+    100% { transform:translate(0,0) rotate(0deg); }
   }
   .player-wrap{
-    position:absolute; left:150px; top:24px;
-    width:980px; height:980px;
+    position:absolute; left:155px; top:15px;
+    width:1040px; height:1040px;
   }
   .player-wrap.floating{
-    animation:playerFloat 9s ease-in-out infinite;
+    animation:playerFloat 10s ease-in-out infinite;
   }
   #vizCanvas{
     position:absolute; inset:0;
-    width:980px; height:980px;
+    width:1040px; height:1040px;
     pointer-events:none;
   }
   .square-zone{
-    position:absolute; left:80px; top:80px;
+    position:absolute; left:110px; top:110px;
     width:820px; height:820px;
     border:3px dashed var(--border-strong);
     border-radius:28px;
@@ -147,15 +144,15 @@
 
   /* ---------- управление плеером ---------- */
   .player-controls{
-    position:absolute; left:230px; top:1020px;
+    position:absolute; left:265px; top:1065px;
     width:820px;
-    display:flex; flex-direction:column; gap:14px;
+    display:flex; flex-direction:column; gap:8px;
     transition:opacity .2s;
   }
   .player-controls.disabled{ opacity:.35; pointer-events:none; }
   .progress-track{
-    width:100%; height:8px;
-    border-radius:4px;
+    width:100%; height:6px;
+    border-radius:3px;
     background:var(--border-neutral);
     overflow:hidden;
     cursor:pointer;
@@ -163,23 +160,23 @@
   .progress-fill{
     height:100%; width:0%;
     background:#fff;
-    border-radius:4px;
+    border-radius:3px;
     pointer-events:none;
   }
   .controls-row{
     display:flex; align-items:center; justify-content:space-between;
-    height:64px;
+    height:56px;
   }
   .volume-pill{
-    display:flex; align-items:center; gap:12px;
+    display:flex; align-items:center; gap:10px;
     background:var(--surface);
     border:1px solid var(--border-neutral);
-    border-radius:16px;
-    height:64px; width:300px;
-    padding:0 18px;
+    border-radius:14px;
+    height:56px; width:290px;
+    padding:0 16px;
     flex:0 0 auto;
   }
-  .volume-icon{ width:22px; height:22px; color:var(--text-muted); flex:0 0 auto; }
+  .volume-icon{ width:20px; height:20px; color:var(--text-muted); flex:0 0 auto; }
   .volume-slider{
     flex:1; -webkit-appearance:none; appearance:none;
     height:6px; border-radius:3px;
@@ -188,22 +185,22 @@
   }
   .volume-slider::-webkit-slider-thumb{
     -webkit-appearance:none; appearance:none;
-    width:18px; height:18px; border-radius:50%;
+    width:16px; height:16px; border-radius:50%;
     background:var(--accent); cursor:pointer;
   }
   .volume-slider::-moz-range-thumb{
-    width:18px; height:18px; border-radius:50%;
+    width:16px; height:16px; border-radius:50%;
     background:var(--accent); border:none; cursor:pointer;
   }
   .volume-pct{
-    width:46px; text-align:right;
+    width:42px; text-align:right;
     font-variant-numeric:tabular-nums;
-    color:var(--text-muted); font-size:14px;
+    color:var(--text-muted); font-size:13px;
     flex:0 0 auto;
   }
   .play-pause-btn{
-    width:64px; height:64px;
-    border-radius:16px;
+    width:56px; height:56px;
+    border-radius:14px;
     border:1px solid var(--border-neutral);
     background:var(--surface);
     cursor:pointer;
@@ -214,7 +211,7 @@
   }
   .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.04); }
   .play-pause-btn img{
-    width:26px; height:26px;
+    width:24px; height:24px;
     filter:brightness(0) saturate(100%) invert(1);
   }
 
@@ -245,7 +242,7 @@
 
   /* ---------- правая половина ---------- */
   .zones-container{
-    position:absolute; left:1350px; top:24px;
+    position:absolute; left:1350px; top:15px;
     width:1148px; height:935px;
     border:3px solid var(--border-strong);
     border-radius:28px;
@@ -289,7 +286,7 @@
 
   /* ---------- пул треков ---------- */
   .pool-container{
-    position:absolute; left:1350px; top:975px;
+    position:absolute; left:1350px; top:966px;
     width:960px; height:140px;
     border:2px solid var(--border-neutral);
     border-radius:20px;
@@ -314,7 +311,7 @@
 
   /* ---------- кнопка «Отправить ответы» ---------- */
   .submit-btn{
-    position:absolute; left:2330px; top:975px;
+    position:absolute; left:2330px; top:966px;
     width:190px; height:140px;
     border-radius:20px;
     background:var(--surface-2);
@@ -524,13 +521,12 @@
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
   const ZONE_ROW_CAP      = 8;
-  const ZONE_WIDTH_SAFETY = 6; // запас в пикселях, чтобы иконки не переносились раньше времени из-за округления
+  const ZONE_WIDTH_SAFETY = 6;
 
   const STAGE_W = 2560, STAGE_H = 1150;
 
   /* ==========================================================
-     МАСШТАБИРОВАНИЕ СЦЕНЫ — безопасный вариант (min), никогда
-     не даёт контенту уехать за пределы окна.
+     МАСШТАБИРОВАНИЕ СЦЕНЫ — безопасный вариант (min).
      ========================================================== */
   const stageEl = document.getElementById('stage');
   function scaleStage(){
@@ -702,9 +698,6 @@
     }
   }
 
-  // До 8 треков — всегда одна строка (иконки сжимаются по ширине с запасом,
-  // чтобы не переноситься раньше времени из-за округления). 9-16 — две строки.
-  // Больше — размеры как для 16 и скролл.
   function resizeZoneIcons(z){
     const contentEl = zoneContentEls[z];
     const ids = zoneAssignments[z];
@@ -927,7 +920,6 @@
     const g1 = lighten(currentVizColors[0], 0.45);
     const g2 = lighten(currentVizColors[1], 0.45);
     currentGlowColor = g1;
-    // свечение вокруг самой обложки (остаётся, как и было)
     squareZone.style.boxShadow =
       '0 0 50px 8px ' + rgbaStr(g1, .35) + ', ' +
       '0 0 90px 20px ' + rgbaStr(g2, .20);
@@ -1001,21 +993,25 @@
 
   /* ==========================================================
      ВИЗУАЛИЗАЦИЯ ЧАСТОТ
-     101 палочка на грань (первая/последняя слегка выступают за
-     угол), все грани показывают полный спектр; низ и лево
-     инвертированы (низкие частоты — к правому нижнему углу).
-     Авто-нормализация (адаптивный «потолок» уровня) — картинка
-     всегда живая независимо от громкости; акцент по центру
-     каждой грани. Свечение — отдельным слоем позади (не красит
-     сами палочки). Плюс бас-зум обложки и частицы.
+     101 палочка на грань (первая/последняя чуть выступают за
+     угол); низ и лево инвертированы (низкие частоты — к правому
+     нижнему углу). Нормализация — по 4 отдельным полосам спектра
+     со своим адаптивным «потолком» на каждую, чтобы верх спектра
+     не проседал. Свечение — отдельным проходом позади (много
+     мягких полупрозрачных палочек с блюром, без единого сплошного
+     блока), не красит сами палочки. Область визуализации сильно
+     расширена — частицам и свечению есть куда улетать, и они
+     плавно гаснут по мере удаления от квадрата.
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
-  const WRAP_SIZE     = 980;
+  const WRAP_SIZE     = 1040;
   const SQUARE_SIZE   = 820;
-  const MARGIN        = (WRAP_SIZE - SQUARE_SIZE) / 2; // 80
+  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 110 — общая «атмосфера» вокруг квадрата
+  const BAR_MARGIN    = 80;  // как далеко может вытягиваться сама чёткая палочка
   const BARS_PER_SIDE = 101;
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
+  const CENTER        = WRAP_SIZE / 2;
 
   const vizCanvas = document.getElementById('vizCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -1046,29 +1042,38 @@
     return out;
   }
 
-  // авто-потолок уровня — быстро подстраивается вверх на пиках,
-  // медленно опускается в тишине, поэтому картинка всегда живая
-  let agcCeiling = 40;
+  function smoothstep(edge0, edge1, x){
+    const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+    return t * t * (3 - 2 * t);
+  }
+
+  // авто-нормализация по 4 отдельным полосам спектра (у каждой свой
+  // адаптивный «потолок»), чтобы высокие частоты не проседали
+  // относительно низких — картинка равномерно живая по всему периметру
+  const BAND_COUNT = 4;
+  let bandCeilings = [30, 30, 30, 30];
   function normalizeSpectrum(rawArr){
     const n = rawArr.length;
-    let frameMax = 0;
-    for(let i = 0; i < n; i++){ if(rawArr[i] > frameMax) frameMax = rawArr[i]; }
-    if(frameMax > agcCeiling){
-      agcCeiling += (frameMax - agcCeiling) * 0.35;
-    } else {
-      agcCeiling += (frameMax - agcCeiling) * 0.015;
-    }
-    if(agcCeiling < 18) agcCeiling = 18;
-
+    const bandSize = Math.ceil(n / BAND_COUNT);
     const out = new Float32Array(n);
+    for(let b = 0; b < BAND_COUNT; b++){
+      const start = b * bandSize;
+      const end = Math.min(n, start + bandSize);
+      let bandMax = 0;
+      for(let i = start; i < end; i++){ if(rawArr[i] > bandMax) bandMax = rawArr[i]; }
+      if(bandMax > bandCeilings[b]) bandCeilings[b] += (bandMax - bandCeilings[b]) * 0.35;
+      else bandCeilings[b] += (bandMax - bandCeilings[b]) * 0.015;
+      if(bandCeilings[b] < 14) bandCeilings[b] = 14;
+      for(let i = start; i < end; i++){
+        let v = rawArr[i] / bandCeilings[b];
+        v = Math.pow(Math.min(1, v), 0.5);
+        out[i] = Math.min(1, v);
+      }
+    }
+    // лёгкий общий наклон — басы всё ещё чуть заметнее верхних
     for(let i = 0; i < n; i++){
-      let v = rawArr[i] / agcCeiling;
       const t = i / (n - 1);
-      const trebleBoost = 1 + 1.5 * t; // компенсация естественного спада высоких
-      v = Math.min(1.5, v * trebleBoost);
-      v = Math.pow(Math.min(1, v), 0.5); // мягкая гамма — подтягивает тихие сигналы
-      v = v * (1.1 - 0.1 * t); // басы всё ещё чуть заметнее верхних
-      out[i] = Math.min(1, v);
+      out[i] = Math.min(1, out[i] * (1.08 - 0.08 * t));
     }
     return out;
   }
@@ -1095,30 +1100,37 @@
     vctx.fill();
   }
 
-  // ---- частицы: летят дальше и гаснут плавнее ----
+  // ---- частицы: медленные, летят далеко, гаснут и по времени, и по расстоянию ----
   let particles = [];
   function spawnParticles(energy){
-    const count = Math.floor(energy * 2.4);
+    const count = Math.floor(energy * 1.6);
     for(let i = 0; i < count; i++){
       const side = Math.floor(Math.random() * 4);
       let x, y, vx, vy;
-      if(side === 0){ x=Math.random()*WRAP_SIZE; y=MARGIN; vx=(Math.random()-0.5)*1.0; vy=-Math.random()*3.2-1.0; }
-      else if(side === 1){ x=WRAP_SIZE-MARGIN; y=Math.random()*WRAP_SIZE; vx=Math.random()*3.2+1.0; vy=(Math.random()-0.5)*1.0; }
-      else if(side === 2){ x=Math.random()*WRAP_SIZE; y=WRAP_SIZE-MARGIN; vx=(Math.random()-0.5)*1.0; vy=Math.random()*3.2+1.0; }
-      else{ x=MARGIN; y=Math.random()*WRAP_SIZE; vx=-Math.random()*3.2-1.0; vy=(Math.random()-0.5)*1.0; }
+      if(side === 0){ x=Math.random()*WRAP_SIZE; y=EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=-Math.random()*1.3-0.4; }
+      else if(side === 1){ x=WRAP_SIZE-EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=Math.random()*1.3+0.4; vy=(Math.random()-0.5)*0.5; }
+      else if(side === 2){ x=Math.random()*WRAP_SIZE; y=WRAP_SIZE-EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=Math.random()*1.3+0.4; }
+      else{ x=EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=-Math.random()*1.3-0.4; vy=(Math.random()-0.5)*0.5; }
       particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2+1 });
     }
   }
+  const PARTICLE_MAX_DIST = CENTER; // расстояние от центра до края холста
   function updateAndDrawParticles(){
     vctx.shadowBlur = 0;
     vctx.fillStyle = '#ffffff';
     for(let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
       p.x += p.vx; p.y += p.vy;
-      p.vx *= 0.985; p.vy *= 0.985;
-      p.life -= 0.006;
-      if(p.life <= 0){ particles.splice(i, 1); continue; }
-      vctx.globalAlpha = Math.max(0, p.life * p.life); // плавное затухание к концу
+      p.vx *= 0.99; p.vy *= 0.99;
+      p.life -= 0.0045;
+      const dist = Math.hypot(p.x - CENTER, p.y - CENTER);
+      const distFade = 1 - smoothstep(PARTICLE_MAX_DIST * 0.5, PARTICLE_MAX_DIST * 0.95, dist);
+      const alpha = Math.max(0, p.life) * distFade;
+      if(p.life <= 0 || dist > PARTICLE_MAX_DIST * 0.98 || alpha <= 0.01){
+        particles.splice(i, 1);
+        continue;
+      }
+      vctx.globalAlpha = alpha;
       vctx.beginPath();
       vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
       vctx.fill();
@@ -1144,7 +1156,6 @@
     let norm = normalizeSpectrum(resample(rawData, BARS_PER_SIDE));
     norm = smoothArray(norm);
 
-    // форма с акцентом по центру каждой грани + разводим на 2 пары граней
     const sideA = new Float32Array(BARS_PER_SIDE); // верх + право
     const sideB = new Float32Array(BARS_PER_SIDE); // низ + лево (инверт.)
     for(let i = 0; i < BARS_PER_SIDE; i++){
@@ -1157,24 +1168,23 @@
 
     const gap = 1.4;
     const barW = Math.max(1, BASE_STEP - gap);
-    const maxLen = MARGIN - 6;
+    const maxLen = BAR_MARGIN - 6;
     const radius = barW / 2;
 
-    // --- слой 1: свечение позади (не красит сами палочки) ---
-    let maxA = 0, maxB = 0;
-    for(let i = 0; i < BARS_PER_SIDE; i++){
-      if(sideA[i] > maxA) maxA = sideA[i];
-      if(sideB[i] > maxB) maxB = sideB[i];
-    }
+    // --- слой 1: мягкое свечение позади — много полупрозрачных
+    // размытых палочек чуть длиннее обычных (не единый сплошной блок) ---
     vctx.shadowColor = rgbaStr(currentGlowColor, 1);
-    vctx.shadowBlur = 26;
-    vctx.fillStyle = rgbaStr(currentGlowColor, .5);
-    const glA = Math.max(6, maxA * maxLen * 0.9);
-    const glB = Math.max(6, maxB * maxLen * 0.9);
-    roundedBar(MARGIN, MARGIN - glA, SQUARE_SIZE, glA, glA / 2);               // верх
-    roundedBar(MARGIN + SQUARE_SIZE, MARGIN, glA, SQUARE_SIZE, glA / 2);       // право
-    roundedBar(MARGIN, MARGIN + SQUARE_SIZE, SQUARE_SIZE, glB, glB / 2);       // низ
-    roundedBar(MARGIN - glB, MARGIN, glB, SQUARE_SIZE, glB / 2);               // лево
+    vctx.shadowBlur = 22;
+    vctx.fillStyle = rgbaStr(currentGlowColor, .28);
+    for(let i = 0; i < BARS_PER_SIDE; i++){
+      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP;
+      let len = Math.min(EFFECT_MARGIN - 12, Math.max(2, sideA[i] * maxLen) * 1.35);
+      roundedBar(pos, EFFECT_MARGIN - len, barW, len, barW / 2);
+      roundedBar(EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, barW / 2);
+      len = Math.min(EFFECT_MARGIN - 12, Math.max(2, sideB[i] * maxLen) * 1.35);
+      roundedBar(pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, barW / 2);
+      roundedBar(EFFECT_MARGIN - len, pos, len, barW, barW / 2);
+    }
 
     // --- слой 2: сами палочки — чистый градиент, без тени ---
     vctx.shadowBlur = 0;
@@ -1184,13 +1194,13 @@
     vctx.fillStyle = grad;
 
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const pos = MARGIN - BASE_STEP / 2 + i * BASE_STEP;
+      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP;
       let len = Math.max(2, sideA[i] * maxLen);
-      roundedBar(pos, MARGIN - len, barW, len, radius);
-      roundedBar(MARGIN + SQUARE_SIZE, pos, len, barW, radius);
+      roundedBar(pos, EFFECT_MARGIN - len, barW, len, radius);
+      roundedBar(EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);
       len = Math.max(2, sideB[i] * maxLen);
-      roundedBar(pos, MARGIN + SQUARE_SIZE, barW, len, radius);
-      roundedBar(MARGIN - len, pos, len, barW, radius);
+      roundedBar(pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);
+      roundedBar(EFFECT_MARGIN - len, pos, len, barW, radius);
     }
 
     const energy = norm.reduce(function(a,b){ return a+b; }, 0) / norm.length;
@@ -1351,7 +1361,7 @@
       poolBuffer.appendChild(chip);
       ids.push(i);
     }
-    poolOrder = ids; // по порядку номеров, без перемешивания
+    poolOrder = ids;
 
     refreshPoolRender();
     loadingEl.style.display = 'none';
