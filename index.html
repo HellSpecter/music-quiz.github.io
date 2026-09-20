@@ -107,8 +107,8 @@
     pointer-events:none;
   }
   .square-zone{
-    position:absolute; left:180px; top:180px;
-    width:680px; height:680px;
+    position:absolute; left:140px; top:140px;
+    width:760px; height:760px;
     border:3px dashed var(--border-strong);
     border-radius:28px;
     overflow:hidden;
@@ -144,8 +144,8 @@
 
   /* ---------- управление плеером ---------- */
   .player-controls{
-    position:absolute; left:335px; top:1065px;
-    width:680px;
+    position:absolute; left:295px; top:1065px;
+    width:760px;
     display:flex; flex-direction:column; gap:8px;
     transition:opacity .2s;
   }
@@ -935,8 +935,6 @@
   function playTrack(id){
     ensureAudioGraph();
     trackReady = false; // пока не пришли метаданные новой дорожки — перемотка запрещена
-    zoomEnvelope = 0;
-    prevBassRaw = 0;
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
     progressFill.style.width = '0%';
@@ -988,16 +986,12 @@
     squareZone.classList.remove('playing');
     playerWrap.classList.remove('floating');
     stopVisualizer();
-    const chipImg = squareZone.querySelector('.chip img');
-    if(chipImg) chipImg.style.transform = '';
   });
   audioEl.addEventListener('ended', function(){
     playPauseIcon.src = 'ui/play.png';
     squareZone.classList.remove('playing');
     playerWrap.classList.remove('floating');
     stopVisualizer();
-    const chipImg = squareZone.querySelector('.chip img');
-    if(chipImg) chipImg.style.transform = '';
   });
   audioEl.addEventListener('timeupdate', function(){
     const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
@@ -1045,8 +1039,8 @@
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
   const WRAP_SIZE     = 1040;
-  const SQUARE_SIZE   = 680;
-  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 180 — простор для частиц (летят на 200px)
+  const SQUARE_SIZE   = 760;
+  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 140 — общая «атмосфера» вокруг квадрата
   const BAR_MARGIN    = 80;  // как далеко может вытягиваться сама чёткая палочка
   const BARS_PER_SIDE = 101;
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
@@ -1090,7 +1084,7 @@
   // адаптивный «потолок»), чтобы высокие частоты не проседали
   // относительно низких — картинка равномерно живая по всему периметру
   const BAND_COUNT = 8;
-  const SPECTRUM_FLOOR = 0.22; // выше, чем было — нигде не должно быть заметных провалов
+  const SPECTRUM_FLOOR = 0.12; // ни одна палочка не проваливается в полный ноль
   let bandCeilings = [28,28,28,28,28,28,28,28];
   function normalizeSpectrum(rawArr){
     const n = rawArr.length;
@@ -1110,8 +1104,8 @@
         out[i] = Math.min(1, v);
       }
     }
-    // лёгкий общий наклон (басы чуть заметнее) + высокий минимальный «пол»,
-    // чтобы нигде не было заметных провалов/пустых участков
+    // лёгкий общий наклон (басы чуть заметнее) + минимальный «пол»,
+    // чтобы нигде не было полностью мёртвых участков
     for(let i = 0; i < n; i++){
       const t = i / (n - 1);
       let v = out[i] * (1.08 - 0.08 * t);
@@ -1121,19 +1115,16 @@
     return out;
   }
 
-  // широкое сглаживание (9 соседей) — превращает «рваный» рельеф в
-  // плавную непрерывную дугу без резких провалов между палочками
   function smoothArray(arr){
     const n = arr.length;
     const out = new Float32Array(n);
-    const w = [1,2,3,4,5,4,3,2,1];
-    const wSum = 25;
     for(let i = 0; i < n; i++){
-      let acc = 0;
-      for(let k = -4; k <= 4; k++){
-        acc += arr[(i + k + n) % n] * w[k + 4];
-      }
-      out[i] = acc / wSum;
+      const a = arr[(i - 2 + n) % n];
+      const b = arr[(i - 1 + n) % n];
+      const c = arr[i];
+      const d = arr[(i + 1) % n];
+      const e = arr[(i + 2) % n];
+      out[i] = (a + b * 2 + c * 3 + d * 2 + e) / 9;
     }
     return out;
   }
@@ -1149,45 +1140,43 @@
     vctx.fill();
   }
 
-  // ---- частицы: строго со спецификацией ----
-  // вылетают строго с грани картинки (а не откуда попало вдоль всей
-  // ширины холста — раньше в этом и была причина «вылета из ниоткуда»),
-  // белые, стартовая прозрачность 85%, долетают ровно до 200px и там
-  // становятся полностью прозрачными; пока звучит бас — летят на 20%
-  // быстрее.
-  const PARTICLE_MAX_TRAVEL = 200;
-  const PARTICLE_START_ALPHA = 0.85;
+  // ---- частицы: летят от края квадрата и гаснут по мере УДАЛЕНИЯ ОТ ТОЧКИ
+  // СВОЕГО ВЫЛЕТА (раньше ошибочно считалось расстояние от центра всего
+  // холста — а точка вылета и так уже почти у края, поэтому угасание
+  // начиналось практически сразу же после рождения частицы) ----
   let particles = [];
   function spawnParticles(energy){
+    // дробная скорость появления, без «базового шума» — частицы есть
+    // только когда реально что-то играет
     const rate = energy * 3.2;
     let count = Math.floor(rate);
     if(Math.random() < (rate - count)) count++;
     for(let i = 0; i < count; i++){
       const side = Math.floor(Math.random() * 4);
       let x, y, vx, vy;
-      // x/y ограничены именно шириной/высотой квадрата (EFFECT_MARGIN..EFFECT_MARGIN+SQUARE_SIZE),
-      // а не всем холстом — иначе точка вылета оказывалась в пустоте рядом с картинкой
-      if(side === 0){ x = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; y = EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=-Math.random()*1.3-0.4; }
-      else if(side === 1){ x = EFFECT_MARGIN + SQUARE_SIZE; y = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; vx=Math.random()*1.3+0.4; vy=(Math.random()-0.5)*0.5; }
-      else if(side === 2){ x = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; y = EFFECT_MARGIN + SQUARE_SIZE; vx=(Math.random()-0.5)*0.5; vy=Math.random()*1.3+0.4; }
-      else{ x = EFFECT_MARGIN; y = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; vx=-Math.random()*1.3-0.4; vy=(Math.random()-0.5)*0.5; }
-      particles.push({ x:x, y:y, vx:vx, vy:vy, size:Math.random()*2.2+1.6, startX:x, startY:y });
+      if(side === 0){ x=Math.random()*WRAP_SIZE; y=EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=-Math.random()*1.3-0.4; }
+      else if(side === 1){ x=WRAP_SIZE-EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=Math.random()*1.3+0.4; vy=(Math.random()-0.5)*0.5; }
+      else if(side === 2){ x=Math.random()*WRAP_SIZE; y=WRAP_SIZE-EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=Math.random()*1.3+0.4; }
+      else{ x=EFFECT_MARGIN; y=Math.random()*WRAP_SIZE; vx=-Math.random()*1.3-0.4; vy=(Math.random()-0.5)*0.5; }
+      particles.push({ x:x, y:y, vx:vx, vy:vy, life:1, size:Math.random()*2.2+1.6, startX:x, startY:y });
     }
   }
-  function updateAndDrawParticles(bassActive){
+  const PARTICLE_MAX_TRAVEL = EFFECT_MARGIN - 6; // почти всё доступное пространство до края холста
+  function updateAndDrawParticles(){
     vctx.shadowBlur = 0;
     vctx.fillStyle = '#ffffff';
-    const speedMult = bassActive ? 1.2 : 1.0;
     for(let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
-      p.x += p.vx * speedMult;
-      p.y += p.vy * speedMult;
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.99; p.vy *= 0.99;
+      p.life -= 0.0035;
       const traveled = Math.hypot(p.x - p.startX, p.y - p.startY);
-      if(traveled >= PARTICLE_MAX_TRAVEL){
+      const distFade = 1 - smoothstep(PARTICLE_MAX_TRAVEL * 0.55, PARTICLE_MAX_TRAVEL, traveled);
+      const alpha = Math.min(1, Math.max(0, p.life) * distFade * 1.5); // заметнее, чем раньше
+      if(p.life <= 0 || traveled >= PARTICLE_MAX_TRAVEL || alpha <= 0.015){
         particles.splice(i, 1);
         continue;
       }
-      const alpha = PARTICLE_START_ALPHA * (1 - traveled / PARTICLE_MAX_TRAVEL);
       vctx.globalAlpha = alpha;
       vctx.beginPath();
       vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -1201,46 +1190,33 @@
   // недавним средним уровнем баса), а не на абсолютную громкость —
   // раньше он почти сразу вылетал в максимум и там и оставался,
   // т.к. бас в миксе присутствует почти постоянно ----
-  function getBassRaw(rawData){
+  let bassAvg = 0;
+  let bassPulse = 0;
+  function updateBassZoom(rawData){
     const n = Math.min(10, rawData.length);
     let sum = 0;
     for(let i = 0; i < n; i++) sum += rawData[i];
-    return (sum / n) / 255;
-  }
+    const bassRaw = (sum / n) / 255;
 
-  // ---- зум обложки: чёткий детектор удара баса (резкий скачок между
-  // соседними кадрами), а не медленное среднее. Поэтому картинка
-  // большую часть времени в исходном размере и лишь быстро «дёргается»
-  // ровно в момент удара, тут же плавно возвращаясь обратно ----
-  let prevBassRaw = 0;
-  let zoomEnvelope = 0;
-  const BASS_ONSET_THRESHOLD = 0.06;
-  function updateBassZoom(bassRaw){
-    const delta = bassRaw - prevBassRaw;
-    if(delta > BASS_ONSET_THRESHOLD) zoomEnvelope = 1;
-    zoomEnvelope *= 0.82; // быстрый спад назад к исходному размеру
-    prevBassRaw = bassRaw;
+    bassAvg += (bassRaw - bassAvg) * 0.02; // медленное «фоновое» среднее
+    const kick = Math.max(0, bassRaw - bassAvg) * 2.4; // насколько бас СЕЙЧАС выше фона — это и есть удар
+    bassPulse += (kick - bassPulse) * 0.28;
 
     const chipImg = squareZone.querySelector('.chip img');
     if(chipImg){
-      const scale = 1 + zoomEnvelope * 0.04;
+      const scale = 1 + Math.min(0.045, bassPulse * 0.045);
       chipImg.style.transform = 'scale(' + scale.toFixed(4) + ')';
     }
   }
 
-  const BASS_ACTIVE_THRESHOLD = 0.16; // выше этого — считаем, что «звучит бас» (для скорости частиц)
-
   function drawFrame(rawData){
-    const bassRaw = getBassRaw(rawData);
-    const bassActive = bassRaw > BASS_ACTIVE_THRESHOLD;
-
     let norm = normalizeSpectrum(resample(rawData, BARS_PER_SIDE));
     norm = smoothArray(norm);
 
     const arrDirect   = new Float32Array(BARS_PER_SIDE); // низкие частоты — у первого индекса
     const arrReversed = new Float32Array(BARS_PER_SIDE); // низкие частоты — у последнего индекса
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const shape = 0.45 + 0.55 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
+      const shape = 0.55 + 0.45 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
       arrDirect[i]   = norm[i] * shape;
       arrReversed[i] = norm[BARS_PER_SIDE - 1 - i] * shape;
     }
@@ -1281,9 +1257,9 @@
 
     const energy = norm.reduce(function(a,b){ return a+b; }, 0) / norm.length;
     spawnParticles(energy);
-    updateAndDrawParticles(bassActive);
+    updateAndDrawParticles();
 
-    updateBassZoom(bassRaw);
+    updateBassZoom(rawData);
   }
 
   function startVisualizer(){
