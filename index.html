@@ -106,9 +106,6 @@
     overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     background:rgba(255,255,255,.02);
-    /* box-shadow сюда намеренно НЕ включён — свечение должно исчезать
-       мгновенно вместе с треком, а не тянуться (раньше именно плавное
-       угасание тени создавало впечатление «остатка картинки») */
     transition:background .15s, border-color .2s, border-radius .2s;
     z-index:2;
   }
@@ -511,19 +508,6 @@
   /* ==========================================================
      УЧАСТНИКИ — редактируйте этот блок, чтобы добавить, убрать
      или временно отключить участника.
-     Сетка вёрстки рассчитана ровно на 10 зон (5 строк × 2
-     колонки), поэтому здесь всегда должно быть 10 записей —
-     если участника пока нет, просто поставьте active:false,
-     запись при этом можно оставить с пустым именем.
-
-     name   — имя, которое покажется в зоне
-     color  — цвет зоны как "R,G,B" (три числа 0-255 через запятую)
-     active — true:  зона рабочая, в неё можно перетаскивать
-                      треки, и она участвует в проверке при
-                      отправке ответов
-              false: зона выключена — серая, недоступна для
-                      перетаскивания и НЕ участвует в проверке
-                      на «отправить ответы»
      ========================================================== */
   const PARTICIPANTS = [
     { name:'Тимур',  color:'255,0,0',     active:true },
@@ -550,7 +534,7 @@
   const STAGE_W = 2560, STAGE_H = 1250;
 
   /* ==========================================================
-     МАСШТАБИРОВАНИЕ СЦЕНЫ — безопасный вариант (min).
+     МАСШТАБИРОВАНИЕ СЦЕНЫ
      ========================================================== */
   const stageEl = document.getElementById('stage');
   function scaleStage(){
@@ -569,8 +553,7 @@
   let poolPage = 0;
   const zoneAssignments = {};
   let squareTrackId = null;
-  // откуда трек попал в плеер — чтобы вернуть его именно туда при замене
-  let squareTrackOrigin = null;
+  let squareTrackOrigin = null; // откуда трек попал в плеер
 
   const poolBuffer = document.createElement('div');
   poolBuffer.style.display = 'none';
@@ -680,7 +663,7 @@
   function getChip(id){ return chipsById.get(Number(id)); }
 
   /* ==========================================================
-     ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ (из PARTICIPANTS)
+     ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ
      ========================================================== */
   const zonesGrid = document.getElementById('zonesGrid');
   const zoneContentEls = {};
@@ -720,7 +703,6 @@
           if(id !== '') moveTrackTo(id, 'zone', z);
         });
       }
-      // неактивная зона намеренно не получает обработчик drop
     }
   }
 
@@ -824,8 +806,6 @@
   /* ==========================================================
      ПЕРЕМЕЩЕНИЕ ТРЕКОВ
      ========================================================== */
-  // где сейчас находится трек — нужно, чтобы запомнить «дом» трека,
-  // который кладут в плеер
   function locateTrack(id){
     id = Number(id);
     if(squareTrackId === id) return { type:'square' };
@@ -837,7 +817,6 @@
     return null;
   }
 
-  // трек, который был в плеере, возвращается туда, откуда его взяли
   function returnSquareTrackHome(){
     if(squareTrackId === null) return;
     const oldId = squareTrackId;
@@ -898,7 +877,6 @@
     if(!chipsById.has(id)) return;
     if(destType === 'square' && squareTrackId === id) return;
 
-    // запоминаем «дом» ДО того, как трек будет откреплён
     const originOfNew = locateTrack(id);
 
     const touchedZones = new Set();
@@ -906,11 +884,6 @@
       if(zoneAssignments[z].indexOf(id) > -1) touchedZones.add(Number(z));
     }
 
-    // Важно: если в плеере уже что-то играет и мы бросаем туда ДРУГОЙ
-    // трек, нужно остановить визуализацию СТАРОГО трека ДО начала
-    // нового — иначе одновременно работают два цикла анимации
-    // (раньше именно это приводило к «ускорению» частиц и к тому, что
-    // эффекты уже никогда не гасли).
     if(destType === 'square' && squareTrackId !== null && squareTrackId !== id){
       stopVisualizer();
     }
@@ -923,7 +896,6 @@
       refreshPoolRender();
 
     } else if(destType === 'square'){
-      // прежний трек возвращается туда, откуда его когда-то взяли
       returnSquareTrackHome();
       squareTrackId = id;
       squareTrackOrigin = (originOfNew && originOfNew.type !== 'square') ? originOfNew : null;
@@ -969,14 +941,12 @@
      АУДИО
      ========================================================== */
   const audioEl = new Audio();
-  // громкость элемента ВСЕГДА 1: она влияла бы на данные анализатора.
-  // Регулировка громкости идёт отдельным GainNode ПОСЛЕ анализатора,
-  // поэтому палочки одинаковы и на 5%, и на 100%.
+  // громкость элемента ВСЕГДА 1 — регулировка идёт GainNode'ом после
+  // анализатора, поэтому на палочки она не влияет
   audioEl.volume = 1;
   let userVolume = 1;
 
   let currentVizColors = [[108,99,255],[56,232,224]];
-  let currentGlowColor  = [170,165,255];
 
   function rgbStr(rgb){ return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')'; }
   function rgbaStr(rgb, a){ return 'rgba(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ',' + a + ')'; }
@@ -985,6 +955,13 @@
       Math.round(rgb[0] + (255 - rgb[0]) * amount),
       Math.round(rgb[1] + (255 - rgb[1]) * amount),
       Math.round(rgb[2] + (255 - rgb[2]) * amount)
+    ];
+  }
+  function darken(rgb, amount){
+    return [
+      Math.round(rgb[0] * (1 - amount)),
+      Math.round(rgb[1] * (1 - amount)),
+      Math.round(rgb[2] * (1 - amount))
     ];
   }
   function lerpColor(c1, c2, t){
@@ -1017,7 +994,6 @@
   function applyGlow(){
     const g1 = lighten(currentVizColors[0], 0.45);
     const g2 = lighten(currentVizColors[1], 0.45);
-    currentGlowColor = g1;
     squareZone.style.boxShadow =
       '0 0 50px 8px ' + rgbaStr(g1, .35) + ', ' +
       '0 0 90px 20px ' + rgbaStr(g2, .20);
@@ -1026,11 +1002,8 @@
   function playTrack(id){
     ensureAudioGraph();
     trackReady = false;
-    zoomEnvelope = 0;
-    prevRange1Level = 0;
-    range1Ceiling = 20;
-    range2Ceiling = 30;
-    barState.fill(0);
+    lowState.fill(0);
+    highState.fill(0);
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
     progressFill.style.width = '0%';
@@ -1120,15 +1093,23 @@
   });
 
   /* ==========================================================
-     ВИЗУАЛИЗАЦИЯ ЧАСТОТ — считываем ровно 2 диапазона:
-       диапазон 1: 20–116 Гц   (низкие — сильный коэффициент
-                                 влияния на длину палочек, ими же
-                                 управляется зум обложки)
-       диапазон 2: 1000–2000 Гц (верхние — слабый коэффициент,
-                                 дают непрерывное «дыхание» формы)
-     101 палочка на грань; низ и лево инвертированы по амплитуде,
-     право и низ — по направлению градиента. Частицы рисуются
-     ПОСЛЕ палочек (перед ними), но холст лежит под картинкой.
+     ВИЗУАЛИЗАТОР
+     -----------------------------------------------------------
+     Два независимых СЛОЯ палочек на одних и тех же позициях:
+       СЛОЙ 1 (задний, широкие палочки)  — 1000-2000 Гц (верх)
+       СЛОЙ 2 (передний, узкие палочки)  — 20-116 Гц   (низ)
+
+     Никаких адаптивных потолков, авто-усилений и выравнивания:
+     байт из FFT -> вычитание фиксированного порога -> фиксированное
+     усиление -> длина палочки. Единственная обработка по времени —
+     слабое сглаживание кадров (нужно, чтобы картинка не мерцала
+     на 60 к/с), его величина в SMOOTH.
+
+     Свечение общее: оба слоя рисуются в отдельный холст без теней,
+     затем этот холст один раз выводится размытым (это и есть
+     свечение) и один раз чётким. Поэтому свечения слоёв не
+     складываются, и это на порядок дешевле, чем shadowBlur на
+     каждой из 400+ палочек — именно он и вызывал лаги.
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, gainNode = null, rafId = null;
 
@@ -1137,26 +1118,51 @@
   const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 170
   const BARS_PER_SIDE = 101;
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
-  const MAX_BAR_LEN   = 95;   // было 74 — палочки стали длиннее
+
+  /* --- ГЛАВНЫЕ РУЧКИ НАСТРОЙКИ ------------------------------
+     FLOOR — что считать тишиной (0..1 от шкалы FFT). Всё ниже
+             порога = палочка лежит.
+     GAIN  — во сколько раз растянуть остаток до максимума.
+     Если верхний слой еле шевелится — поднимите HIGH_GAIN или
+     опустите HIGH_FLOOR. Если низ постоянно в потолке — поднимите
+     LOW_FLOOR (например до 0.60) или уменьшите LOW_GAIN.        */
+  const LOW_FLOOR  = 0.50, LOW_GAIN  = 1.35; // 20-116 Гц
+  const HIGH_FLOOR = 0.28, HIGH_GAIN = 1.45; // 1000-2000 Гц
+  const SMOOTH     = 0.55;                   // сглаживание кадров, 0 = совсем без него
+  const MAX_BAR_LOW  = 95;  // максимальная длина палочки низов
+  const MAX_BAR_HIGH = 78;  // максимальная длина палочки верхов
+  const GLOW_BLUR  = 15;    // радиус общего свечения, px
+  const GLOW_ALPHA = 0.9;   // яркость общего свечения
+
+  const ZOOM_ENABLED = false; // зум обложки временно заморожен
 
   // холст шире обёртки, чтобы частицы не обрезались о его край
   const CANVAS_PAD  = 160;
   const CANVAS_SIZE = WRAP_SIZE + CANVAS_PAD * 2;
 
   const vizCanvas = document.getElementById('vizCanvas');
-  const dpr = window.devicePixelRatio || 1;
-  vizCanvas.width  = CANVAS_SIZE * dpr;
-  vizCanvas.height = CANVAS_SIZE * dpr;
+  // сцена и так ужимается на экране, поэтому больше 1 device-пикселя
+  // на CSS-пиксель нет смысла рисовать — это прямая экономия кадров
+  const dpr = Math.min(window.devicePixelRatio || 1, 1);
+  vizCanvas.width  = Math.round(CANVAS_SIZE * dpr);
+  vizCanvas.height = Math.round(CANVAS_SIZE * dpr);
   const vctx = vizCanvas.getContext('2d');
-  // сдвигаем начало координат: внутри кода используем систему обёртки (0..1100)
   vctx.setTransform(dpr, 0, 0, dpr, CANVAS_PAD * dpr, CANVAS_PAD * dpr);
 
-  function clearCanvas(){
-    vctx.clearRect(-CANVAS_PAD, -CANVAS_PAD, CANVAS_SIZE, CANVAS_SIZE);
+  // отдельный холст только для палочек (оба слоя, без теней)
+  const barsCanvas = document.createElement('canvas');
+  barsCanvas.width  = vizCanvas.width;
+  barsCanvas.height = vizCanvas.height;
+  const bctx = barsCanvas.getContext('2d');
+  bctx.setTransform(dpr, 0, 0, dpr, CANVAS_PAD * dpr, CANVAS_PAD * dpr);
+
+  const CAN_FILTER = (typeof vctx.filter === 'string');
+
+  function clearCanvas(ctx){
+    ctx.clearRect(-CANVAS_PAD, -CANVAS_PAD, CANVAS_SIZE, CANVAS_SIZE);
   }
 
-  // границы бинов для двух диапазонов — считаются один раз, когда
-  // становится известна реальная частота дискретизации
+  // границы бинов для двух диапазонов
   let RANGE1_LO = 0, RANGE1_HI = 2, RANGE2_LO = 20, RANGE2_HI = 40;
 
   function ensureAudioGraph(){
@@ -1164,13 +1170,13 @@
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048; // выше разрешение — нужно точно попасть в диапазон 20-116 Гц
-      analyser.smoothingTimeConstant = 0.0; // всё сглаживание делаем сами и очень слабо
+      // 8192 нужно ради нижнего диапазона: при 2048 на 20-116 Гц
+      // приходилось всего ~4 бина, отсюда «ступеньки» и дёрганье
+      analyser.fftSize = 8192;
+      analyser.smoothingTimeConstant = 0.0; // сглаживаем сами, одним коэффициентом
       gainNode = audioCtx.createGain();
       gainNode.gain.value = userVolume;
 
-      // источник -> анализатор -> громкость -> выход:
-      // регулятор громкости стоит ПОСЛЕ анализатора и на палочки не влияет
       sourceNode.connect(analyser);
       analyser.connect(gainNode);
       gainNode.connect(audioCtx.destination);
@@ -1184,72 +1190,57 @@
     if(audioCtx.state === 'suspended') audioCtx.resume();
   }
 
-  function rangeMax(data, lo, hi){
-    let m = 0;
-    const end = Math.min(hi, data.length - 1);
-    for(let i = lo; i <= end; i++){ if(data[i] > m) m = data[i]; }
-    return m;
-  }
-
-  function resample(data, targetLen){
-    const out = new Uint8Array(targetLen);
-    const srcLen = data.length;
-    for(let i = 0; i < targetLen; i++){
-      out[i] = data[Math.floor(i * srcLen / targetLen)];
-    }
-    return out;
-  }
-
-  /* ---- коэффициенты влияния диапазонов на длину палочек ----
-     нижние частоты «толкают» палочки сильно, верхние — слабо */
-  const SPECTRUM_FLOOR = 0.12; // минимальная длина (покой)
-  const RANGE1_WEIGHT  = 0.62; // низкие частоты — сильное влияние
-  const RANGE2_WEIGHT  = 0.34; // верхние частоты — слабое влияние
-  const RANGE1_GAMMA   = 1.6;  // >1 делает бас «пиковым», а не постоянно максимальным
-  const BAR_SMOOTHING  = 0.06; // всего 6% от прошлого кадра
-
-  let range2Ceiling = 30;
-  let range1Ceiling = 20;
-  const barState = new Float32Array(BARS_PER_SIDE);
-
-  // лёгкое ПРОСТРАНСТВЕННОЕ сглаживание (по соседним палочкам, не по времени)
-  function smoothArray(arr){
-    const n = arr.length;
-    const out = new Float32Array(n);
-    const w = [1,2,3,2,1];
+  // линейная интерполяция диапазона бинов в 101 палочку
+  // (не сглаживание — просто честная растяжка спектра по ширине грани)
+  function resampleRange(data, lo, hi, out){
+    const n = out.length;
+    const span = hi - lo;
     for(let i = 0; i < n; i++){
-      let acc = 0;
-      for(let k = -2; k <= 2; k++) acc += arr[(i + k + n) % n] * w[k + 2];
-      out[i] = acc / 9;
+      const p = lo + span * i / (n - 1);
+      const i0 = Math.floor(p);
+      const i1 = Math.min(hi, i0 + 1);
+      const f = p - i0;
+      out[i] = (data[i0] * (1 - f) + data[i1] * f) / 255;
     }
-    return out;
   }
 
-  function roundedBar(x, y, w, h, r){
+  function mapLevel(x, floor, gain){
+    let v = (x - floor) / (1 - floor);
+    if(v <= 0) return 0;
+    v *= gain;
+    return v > 1 ? 1 : v;
+  }
+
+  const lowRaw   = new Float32Array(BARS_PER_SIDE);
+  const highRaw  = new Float32Array(BARS_PER_SIDE);
+  const lowState = new Float32Array(BARS_PER_SIDE);
+  const highState= new Float32Array(BARS_PER_SIDE);
+
+  function roundedBar(ctx, x, y, w, h, r){
     r = Math.max(0, Math.min(r, w / 2, h / 2));
-    vctx.beginPath();
-    if(vctx.roundRect){
-      vctx.roundRect(x, y, w, h, r);
+    ctx.beginPath();
+    if(ctx.roundRect){
+      ctx.roundRect(x, y, w, h, r);
     } else {
-      vctx.rect(x, y, w, h);
+      ctx.rect(x, y, w, h);
     }
-    vctx.fill();
+    ctx.fill();
   }
 
-  /* ---- частицы: вылетают из невидимого круга (диаметр = грани
-     плеера) позади картинки, летят по 360°, путь 300px, к концу
-     пути полностью прозрачны и в 2.25 раза крупнее ---- */
-  const PARTICLE_MAX_TRAVEL = 300;
+  /* ---- частицы ---- */
+  const PARTICLE_MAX_TRAVEL  = 280;  // было 300
   const PARTICLE_START_ALPHA = 0.7;
-  const PARTICLE_GROWTH = 1.25; // 1 + 1.25 = 2.25×
+  const PARTICLE_RATE        = 2.25; // на 25% меньше, чем было (3.0)
+  const PARTICLE_LIMIT       = 700;
   let particles = [];
   function spawnParticles(energy){
-    const rate = energy * 3.0;
+    if(particles.length > PARTICLE_LIMIT) return;
+    const rate = energy * PARTICLE_RATE;
     let count = Math.floor(rate);
     if(Math.random() < (rate - count)) count++;
     const cx = EFFECT_MARGIN + SQUARE_SIZE / 2;
     const cy = EFFECT_MARGIN + SQUARE_SIZE / 2;
-    const r = SQUARE_SIZE / 2; // невидимый круг спрятан за картинкой (её же диаметра)
+    const r = SQUARE_SIZE / 2;
     for(let i = 0; i < count; i++){
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 0.9 + 0.4;
@@ -1259,154 +1250,114 @@
         x:x, y:y,
         vx:Math.cos(angle) * speed,
         vy:Math.sin(angle) * speed,
-        baseSize:Math.random() * 1.6 + 1.2,
+        size:Math.random() * 1.6 + 1.2,
         startX:x, startY:y
       });
     }
   }
   function updateAndDrawParticles(bassActive){
-    vctx.shadowBlur = 0;
     vctx.fillStyle = '#ffffff';
     const speedMult = bassActive ? 1.2 : 1.0;
     for(let i = particles.length - 1; i >= 0; i--){
       const p = particles[i];
       p.x += p.vx * speedMult;
       p.y += p.vy * speedMult;
-      const traveled = Math.hypot(p.x - p.startX, p.y - p.startY);
+      const dx = p.x - p.startX, dy = p.y - p.startY;
+      const traveled = Math.sqrt(dx*dx + dy*dy);
       if(traveled >= PARTICLE_MAX_TRAVEL){ particles.splice(i, 1); continue; }
-      const k = traveled / PARTICLE_MAX_TRAVEL;
-      // полная прозрачность ровно к 300px пути
-      const alpha = PARTICLE_START_ALPHA * (1 - k);
+      const alpha = PARTICLE_START_ALPHA * (1 - traveled / PARTICLE_MAX_TRAVEL);
       if(alpha > 0.004){
-        const size = p.baseSize * (1 + PARTICLE_GROWTH * k);
         vctx.globalAlpha = alpha;
         vctx.beginPath();
-        vctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         vctx.fill();
       }
     }
     vctx.globalAlpha = 1;
   }
 
-  /* ---- зум обложки: детектор удара по диапазону 1 (20-116 Гц).
-     Работает по «пиковому» уровню баса, поэтому щёлкает на каждой
-     бочке, а не раз в полминуты ---- */
-  let prevRange1Level = 0;
-  let zoomEnvelope = 0;
-  const BASS_ONSET_THRESHOLD = 0.06;
-  function updateBassZoom(range1Level){
-    const delta = range1Level - prevRange1Level;
-    if(delta > BASS_ONSET_THRESHOLD){
-      zoomEnvelope = Math.max(zoomEnvelope, Math.min(1, delta * 2.4));
-    }
-    zoomEnvelope *= 0.85;
-    prevRange1Level = range1Level;
+  /* ---- зум обложки (временно заморожен флагом ZOOM_ENABLED) ---- */
+  function updateBassZoom(){
+    if(!ZOOM_ENABLED) return;
+  }
 
-    if(squareTrackId === null) return;
-    const chipImg = squareZone.querySelector('.chip img');
-    if(chipImg){
-      const scale = 1 + zoomEnvelope * 0.05;
-      chipImg.style.transform = 'scale(' + scale.toFixed(4) + ')';
-      chipImg.style.filter = zoomEnvelope > 0.015 ? ('brightness(' + (1 + zoomEnvelope * 0.22).toFixed(3) + ')') : '';
+  /* ---- один слой палочек по всем четырём граням ---- */
+  function drawLayer(state, maxLen, barW, colorFn){
+    const half = barW / 2;
+    const radius = Math.min(half, 3);
+    for(let i = 0; i < BARS_PER_SIDE; i++){
+      const t = i / (BARS_PER_SIDE - 1);
+      const iRev = BARS_PER_SIDE - 1 - i;
+      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2 - (BASE_STEP - barW) / 2;
+      const posC = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2;
+
+      // верх и лево — прямой градиент
+      bctx.fillStyle = colorFn(t);
+      let len = Math.max(2, state[i] * maxLen);
+      roundedBar(bctx, posC, EFFECT_MARGIN - len, barW, len, radius);          // верх
+      len = Math.max(2, state[i] * maxLen);
+      roundedBar(bctx, EFFECT_MARGIN - len, posC, len, barW, radius);          // лево
+
+      // право и низ — обратный порядок палочек и инвертированный градиент
+      bctx.fillStyle = colorFn(1 - t);
+      len = Math.max(2, state[iRev] * maxLen);
+      roundedBar(bctx, EFFECT_MARGIN + SQUARE_SIZE, posC, len, barW, radius);  // право
+      len = Math.max(2, state[iRev] * maxLen);
+      roundedBar(bctx, posC, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);  // низ
+      void pos;
     }
   }
 
   function drawFrame(rawData){
-    const range1Max = rangeMax(rawData, RANGE1_LO, RANGE1_HI);
-    const range2Max = rangeMax(rawData, RANGE2_LO, RANGE2_HI);
-    const range2Slice = rawData.slice(RANGE2_LO, RANGE2_HI + 1);
-    const range2Resampled = resample(range2Slice.length ? range2Slice : new Uint8Array(1), BARS_PER_SIDE);
+    resampleRange(rawData, RANGE1_LO, RANGE1_HI, lowRaw);
+    resampleRange(rawData, RANGE2_LO, RANGE2_HI, highRaw);
 
-    // потолки нужны только чтобы подстроиться под громкость сведения трека;
-    // спад медленный, поэтому «нормализатор» больше не задирает всё к максимуму
-    if(range2Max > range2Ceiling) range2Ceiling += (range2Max - range2Ceiling) * 0.25;
-    else range2Ceiling += (range2Max - range2Ceiling) * 0.008;
-    range2Ceiling = Math.max(range2Ceiling, 20);
-
-    if(range1Max > range1Ceiling) range1Ceiling += (range1Max - range1Ceiling) * 0.25;
-    else range1Ceiling += (range1Max - range1Ceiling) * 0.008;
-    range1Ceiling = Math.max(range1Ceiling, 24);
-
-    // низкие частоты: «пиковая» кривая — максимум только на настоящем ударе
-    const range1Norm  = Math.min(1, range1Max / range1Ceiling);
-    const range1Level = Math.pow(range1Norm, RANGE1_GAMMA);
-    const bassActive  = range1Level > 0.35;
-
-    let norm = new Float32Array(BARS_PER_SIDE);
+    let lowSum = 0, highSum = 0;
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const v = Math.min(1, range2Resampled[i] / range2Ceiling);
-      norm[i] = Math.pow(v, 0.85);
+      const lowTarget  = mapLevel(lowRaw[i],  LOW_FLOOR,  LOW_GAIN);
+      const highTarget = mapLevel(highRaw[i], HIGH_FLOOR, HIGH_GAIN);
+      lowState[i]  = lowState[i]  * SMOOTH + lowTarget  * (1 - SMOOTH);
+      highState[i] = highState[i] * SMOOTH + highTarget * (1 - SMOOTH);
+      lowSum  += lowState[i];
+      highSum += highState[i];
     }
-    norm = smoothArray(norm);
+    const lowEnergy = lowSum / BARS_PER_SIDE;
+    const energy    = (lowSum + highSum) / (2 * BARS_PER_SIDE);
 
-    for(let i = 0; i < BARS_PER_SIDE; i++){
-      const shape = 0.45 + 0.55 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
-      // коэффициенты влияния: верх слабо, низ сильно
-      let v = SPECTRUM_FLOOR + norm[i] * RANGE2_WEIGHT + range1Level * RANGE1_WEIGHT;
-      const target = Math.min(1, v) * shape;
-      // временное сглаживание — ровно 6%
-      barState[i] = barState[i] * BAR_SMOOTHING + target * (1 - BAR_SMOOTHING);
+    const c0 = currentVizColors[0], c1 = currentVizColors[1];
+
+    clearCanvas(bctx);
+
+    // СЛОЙ 1 (задний): верхние частоты — широкие приглушённые палочки
+    const wideW = Math.max(1, BASE_STEP - 2.4);
+    drawLayer(highState, MAX_BAR_HIGH, wideW, function(t){
+      return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
+    });
+
+    // СЛОЙ 2 (передний): низкие частоты — узкие яркие палочки
+    const narrowW = Math.max(1, wideW * 0.5);
+    drawLayer(lowState, MAX_BAR_LOW, narrowW, function(t){
+      return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
+    });
+
+    // общее свечение: один размытый проход по уже готовым слоям
+    clearCanvas(vctx);
+    vctx.save();
+    vctx.setTransform(1, 0, 0, 1, 0, 0);
+    if(CAN_FILTER){
+      vctx.filter = 'blur(' + (GLOW_BLUR * dpr) + 'px)';
+      vctx.globalAlpha = GLOW_ALPHA;
+      vctx.drawImage(barsCanvas, 0, 0);
+      vctx.filter = 'none';
+      vctx.globalAlpha = 1;
     }
+    vctx.drawImage(barsCanvas, 0, 0);
+    vctx.restore();
 
-    const finalValue = barState;
-    const arrDirect = finalValue;
-    const arrReversed = new Float32Array(BARS_PER_SIDE);
-    for(let i = 0; i < BARS_PER_SIDE; i++) arrReversed[i] = finalValue[BARS_PER_SIDE - 1 - i];
-
-    clearCanvas();
-
-    let sum = 0;
-    for(let i = 0; i < BARS_PER_SIDE; i++) sum += finalValue[i];
-    const energy = sum / BARS_PER_SIDE;
-
-    const gap = 2.4;
-    const barW = Math.max(1, BASE_STEP - gap);
-    const maxLen = MAX_BAR_LEN;
-    const radius = barW / 2;
-
-    const topArr = arrDirect, rightArr = arrReversed, bottomArr = arrReversed, leftArr = arrDirect;
-
-    vctx.shadowBlur = 26;
-    for(let i = 0; i < BARS_PER_SIDE; i++){
-      const t = i / (BARS_PER_SIDE - 1);
-
-      // верх и лево — прямое направление градиента,
-      // низ и право — инвертированное
-      const colDirect = lerpColor(currentVizColors[0], currentVizColors[1], t);
-      const colInvert = lerpColor(currentVizColors[0], currentVizColors[1], 1 - t);
-      const glowDirect = lighten(colDirect, 0.35);
-      const glowInvert = lighten(colInvert, 0.35);
-
-      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP;
-      let len;
-
-      // верх
-      vctx.fillStyle = rgbStr(colDirect);
-      vctx.shadowColor = rgbaStr(glowDirect, .85);
-      len = Math.max(2, Math.min(maxLen, topArr[i] * maxLen));
-      roundedBar(pos, EFFECT_MARGIN - len, barW, len, radius);
-
-      // лево
-      len = Math.max(2, Math.min(maxLen, leftArr[i] * maxLen));
-      roundedBar(EFFECT_MARGIN - len, pos, len, barW, radius);
-
-      // право (градиент инвертирован)
-      vctx.fillStyle = rgbStr(colInvert);
-      vctx.shadowColor = rgbaStr(glowInvert, .85);
-      len = Math.max(2, Math.min(maxLen, rightArr[i] * maxLen));
-      roundedBar(EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);
-
-      // низ (градиент инвертирован)
-      len = Math.max(2, Math.min(maxLen, bottomArr[i] * maxLen));
-      roundedBar(pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);
-    }
-    vctx.shadowBlur = 0;
-
-    // частицы рисуются ПОСЛЕДНИМИ — перед палочками, но холст под картинкой
     spawnParticles(energy);
-    updateAndDrawParticles(bassActive);
+    updateAndDrawParticles(lowEnergy > 0.35);
 
-    updateBassZoom(range1Level);
+    updateBassZoom();
   }
 
   function startVisualizer(){
@@ -1424,8 +1375,10 @@
     if(rafId) cancelAnimationFrame(rafId);
     rafId = null;
     particles = [];
-    barState.fill(0);
-    clearCanvas();
+    lowState.fill(0);
+    highState.fill(0);
+    clearCanvas(bctx);
+    clearCanvas(vctx);
   }
 
   /* ==========================================================
@@ -1451,8 +1404,6 @@
 
   /* ==========================================================
      ОТПРАВКА ОТВЕТОВ
-     Неактивные зоны (active:false в PARTICIPANTS) не участвуют
-     в проверке равномерности распределения.
      ========================================================== */
   const fairnessModal = document.getElementById('fairnessModal');
   const fairnessText  = document.getElementById('fairnessText');
@@ -1474,7 +1425,7 @@
     const unfair = [];
     for(let z = 1; z <= 10; z++){
       const p = PARTICIPANTS[z-1];
-      if(!p || !p.active) continue; // неактивные зоны не проверяем
+      if(!p || !p.active) continue;
       if((zoneAssignments[z] || []).length <= 1) unfair.push(p.name);
     }
     if(unfair.length > 0){
