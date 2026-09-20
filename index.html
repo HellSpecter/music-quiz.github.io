@@ -17,17 +17,7 @@
     --text-muted:#a3a3aa;
     --accent:#f2b134;
     --accent-ink:#1c1c1f;
-
-    --p1:255,0,0;     /* Тимур  */
-    --p2:255,0,228;   /* Коля   */
-    --p3:0,255,210;   /* Андрей */
-    --p4:255,162,0;   /* Юра    */
-    --p5:106,140,171; /* Вася   */
-    --p6:252,255,0;   /* Дима   */
-    --p7:6,0,255;     /* Никита */
-    --p8:0,180,255;   /* Артём  */
-    --p9:48,29,111;   /* Альп   */
-    --p10:92,92,99;   /* резерв — участника пока нет */
+    --ui-highlight:164,177,140; /* обводка громкости/помощи/отправить */
   }
 
   *{ box-sizing:border-box; }
@@ -51,7 +41,7 @@
   #stage{
     position:fixed;
     left:50%; top:0;
-    width:2560px; height:1150px;
+    width:2560px; height:1250px;
     background:var(--stage-bg);
     transform-origin:top center;
   }
@@ -68,7 +58,7 @@
     border-radius:50%;
     transition:filter .15s, transform .15s;
   }
-  .help-icon:hover{ transform:scale(1.06); filter:drop-shadow(0 0 8px rgba(242,177,52,.55)); }
+  .help-icon:hover{ transform:scale(1.06); filter:drop-shadow(0 0 8px rgba(var(--ui-highlight),.55)); }
   .help-tooltip{
     background:var(--surface);
     border:1px solid var(--border-neutral);
@@ -85,7 +75,6 @@
   .help-wrap:hover .help-tooltip{ opacity:1; transform:translateX(0); }
 
   /* ---------- левая половина: плеер + визуализация по периметру ---------- */
-  /* лёгкое «плавание» плеера: смещение + едва заметные повороты */
   @keyframes playerFloat{
     0%   { transform:translate(0,0) rotate(0deg); }
     20%  { transform:translate(4px,-5px) rotate(.3deg); }
@@ -95,26 +84,29 @@
     100% { transform:translate(0,0) rotate(0deg); }
   }
   .player-wrap{
-    position:absolute; left:155px; top:15px;
-    width:1040px; height:1040px;
+    position:absolute; left:125px; top:15px;
+    width:1100px; height:1100px;
   }
   .player-wrap.floating{
     animation:playerFloat 10s ease-in-out infinite;
   }
   #vizCanvas{
     position:absolute; inset:0;
-    width:1040px; height:1040px;
+    width:1100px; height:1100px;
     pointer-events:none;
   }
   .square-zone{
-    position:absolute; left:180px; top:180px;
-    width:680px; height:680px;
+    position:absolute; left:170px; top:170px;
+    width:760px; height:760px;
     border:3px dashed var(--border-strong);
     border-radius:28px;
     overflow:hidden;
     display:flex; align-items:center; justify-content:center;
     background:rgba(255,255,255,.02);
-    transition:background .15s, border-color .2s, border-radius .2s, box-shadow .3s;
+    /* box-shadow сюда намеренно НЕ включён — свечение должно исчезать
+       мгновенно вместе с треком, а не тянуться (раньше именно плавное
+       угасание тени создавало впечатление «остатка картинки») */
+    transition:background .15s, border-color .2s, border-radius .2s;
     z-index:2;
   }
   .square-zone:hover:not(.playing),
@@ -144,8 +136,8 @@
 
   /* ---------- управление плеером ---------- */
   .player-controls{
-    position:absolute; left:335px; top:1065px;
-    width:680px;
+    position:absolute; left:295px; top:1155px;
+    width:760px;
     display:flex; flex-direction:column; gap:8px;
     transition:opacity .2s;
   }
@@ -186,11 +178,11 @@
   .volume-slider::-webkit-slider-thumb{
     -webkit-appearance:none; appearance:none;
     width:16px; height:16px; border-radius:50%;
-    background:var(--accent); cursor:pointer;
+    background:rgb(var(--ui-highlight)); cursor:pointer;
   }
   .volume-slider::-moz-range-thumb{
     width:16px; height:16px; border-radius:50%;
-    background:var(--accent); border:none; cursor:pointer;
+    background:rgb(var(--ui-highlight)); border:none; cursor:pointer;
   }
   .volume-pct{
     width:42px; text-align:right;
@@ -242,7 +234,7 @@
 
   /* ---------- правая половина ---------- */
   .zones-container{
-    position:absolute; left:1350px; top:15px;
+    position:absolute; left:1350px; top:65px;
     width:1148px; height:935px;
     border:3px solid var(--border-strong);
     border-radius:28px;
@@ -286,7 +278,7 @@
 
   /* ---------- пул треков ---------- */
   .pool-container{
-    position:absolute; left:1350px; top:966px;
+    position:absolute; left:1350px; top:1016px;
     width:960px; height:140px;
     border:2px solid var(--border-neutral);
     border-radius:20px;
@@ -311,7 +303,7 @@
 
   /* ---------- кнопка «Отправить ответы» ---------- */
   .submit-btn{
-    position:absolute; left:2330px; top:966px;
+    position:absolute; left:2330px; top:1016px;
     width:190px; height:140px;
     border-radius:20px;
     background:var(--surface-2);
@@ -321,7 +313,7 @@
     cursor:pointer;
     transition:border-color .15s, transform .15s, background .15s;
   }
-  .submit-btn:hover{ border-color:var(--accent); background:#222225; transform:translateY(-2px); }
+  .submit-btn:hover{ border-color:rgb(var(--ui-highlight)); background:#222225; transform:translateY(-2px); }
   .submit-btn svg{ color:var(--text-primary); }
   .submit-btn span{
     font-family:'Unbounded',sans-serif;
@@ -511,19 +503,46 @@
   const AUDIO_EXT = '.mp3';
   const PIC_EXT   = '.jpeg';
 
-  const ZONE_NAMES  = ['Тимур','Коля','Андрей','Юра','Вася','Дима','Никита','Артём','Альп', null];
-  const ZONE_COLORS = ['var(--p1)','var(--p2)','var(--p3)','var(--p4)','var(--p5)','var(--p6)','var(--p7)','var(--p8)','var(--p9)','var(--p10)'];
+  /* ==========================================================
+     УЧАСТНИКИ — редактируйте этот блок, чтобы добавить, убрать
+     или временно отключить участника.
+     Сетка вёрстки рассчитана ровно на 10 зон (5 строк × 2
+     колонки), поэтому здесь всегда должно быть 10 записей —
+     если участника пока нет, просто поставьте active:false,
+     запись при этом можно оставить с пустым именем.
+
+     name   — имя, которое покажется в зоне
+     color  — цвет зоны как "R,G,B" (три числа 0-255 через запятую)
+     active — true:  зона рабочая, в неё можно перетаскивать
+                      треки, и она участвует в проверке при
+                      отправке ответов
+              false: зона выключена — серая, недоступна для
+                      перетаскивания и НЕ участвует в проверке
+                      на «отправить ответы»
+     ========================================================== */
+  const PARTICIPANTS = [
+    { name:'Тимур',  color:'255,0,0',     active:true },
+    { name:'Коля',   color:'255,0,228',   active:true },
+    { name:'Андрей', color:'0,255,210',   active:true },
+    { name:'Юра',    color:'255,162,0',   active:true },
+    { name:'Вася',   color:'106,140,171', active:true },
+    { name:'Дима',   color:'252,255,0',   active:true },
+    { name:'Никита', color:'6,0,255',     active:true },
+    { name:'Артём',  color:'0,180,255',   active:true },
+    { name:'Альп',   color:'48,29,111',   active:true },
+    { name:'',       color:'92,92,99',    active:false }
+  ];
 
   const GOOGLE_FORM_ACTION = 'https://docs.google.com/forms/d/e/1FAIpQLSeeL3Qk6PUrViR5eoiaeZ-LCiy62tj3XXP6igKXWE0NTl11hw/formResponse';
   const GOOGLE_FORM_FIELD  = 'entry.2025397665';
 
-  const POOL_VISIBLE      = 5;
+  const POOL_VISIBLE      = 6;
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
   const ZONE_ROW_CAP      = 8;
   const ZONE_WIDTH_SAFETY = 6;
 
-  const STAGE_W = 2560, STAGE_H = 1150;
+  const STAGE_W = 2560, STAGE_H = 1250;
 
   /* ==========================================================
      МАСШТАБИРОВАНИЕ СЦЕНЫ — безопасный вариант (min).
@@ -654,25 +673,24 @@
   function getChip(id){ return chipsById.get(Number(id)); }
 
   /* ==========================================================
-     ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ
+     ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ (из PARTICIPANTS)
      ========================================================== */
   const zonesGrid = document.getElementById('zonesGrid');
   const zoneContentEls = {};
 
   function buildZones(){
     for(let z = 1; z <= 10; z++){
-      const name = ZONE_NAMES[z-1];
-      const color = ZONE_COLORS[z-1];
-      const isEmpty = (name === null);
+      const p = PARTICIPANTS[z-1] || { name:'', color:'92,92,99', active:false };
+      const isActive = !!p.active;
 
       const zoneEl = document.createElement('div');
-      zoneEl.className = 'zone' + (isEmpty ? ' zone-empty' : '');
-      zoneEl.style.setProperty('--zc', color);
+      zoneEl.className = 'zone' + (isActive ? '' : ' zone-empty');
+      zoneEl.style.setProperty('--zc', p.color);
       zoneEl.dataset.zone = String(z);
 
       const label = document.createElement('div');
-      label.className = 'zone-label' + (isEmpty ? ' muted' : '');
-      label.textContent = isEmpty ? 'пока нет участника' : name;
+      label.className = 'zone-label' + (isActive ? '' : ' muted');
+      label.textContent = isActive ? p.name : 'пока нет участника';
       zoneEl.appendChild(label);
 
       const content = document.createElement('div');
@@ -681,7 +699,7 @@
 
       zonesGrid.appendChild(zoneEl);
 
-      if(!isEmpty){
+      if(isActive){
         zoneAssignments[z] = [];
         zoneContentEls[z] = content;
 
@@ -695,6 +713,7 @@
           if(id !== '') moveTrackTo(id, 'zone', z);
         });
       }
+      // неактивная зона намеренно не получает обработчик drop
     }
   }
 
@@ -789,6 +808,11 @@
     playerControls.classList.toggle('disabled', squareTrackId === null);
   }
 
+  function resetChipVisualFx(chip){
+    const img = chip.querySelector('img');
+    if(img){ img.style.transform = ''; img.style.filter = ''; }
+  }
+
   /* ==========================================================
      ПЕРЕМЕЩЕНИЕ ТРЕКОВ
      ========================================================== */
@@ -808,11 +832,11 @@
 
     if(squareTrackId === id){
       audioEl.pause();
+      stopVisualizer();
       squareTrackId = null;
       squareZone.classList.remove('has-track', 'playing');
       squareZone.style.boxShadow = 'none';
-      const oldImg = chip.querySelector('img');
-      if(oldImg) oldImg.style.transform = '';
+      resetChipVisualFx(chip);
       updatePlayerControlsState();
     }
     return chip;
@@ -826,6 +850,15 @@
     const touchedZones = new Set();
     for(const z in zoneAssignments){
       if(zoneAssignments[z].indexOf(id) > -1) touchedZones.add(Number(z));
+    }
+
+    // Важно: если в плеере уже что-то играет и мы бросаем туда ДРУГОЙ
+    // трек, нужно остановить визуализацию СТАРОГО трека ДО начала
+    // нового — иначе одновременно работают два цикла анимации
+    // (раньше именно это приводило к «ускорению» частиц и к тому, что
+    // эффекты уже никогда не гасли).
+    if(destType === 'square' && squareTrackId !== null && squareTrackId !== id){
+      stopVisualizer();
     }
 
     const chip = detachTrack(id);
@@ -934,9 +967,9 @@
 
   function playTrack(id){
     ensureAudioGraph();
-    trackReady = false; // пока не пришли метаданные новой дорожки — перемотка запрещена
+    trackReady = false;
     zoomEnvelope = 0;
-    prevBassRaw = 0;
+    prevRange1Level = 0;
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
     progressFill.style.width = '0%';
@@ -959,15 +992,9 @@
   }
   playPauseBtn.addEventListener('click', toggleReplayOrPause);
 
-  // Раньше здесь была ошибка: currentTime у переиспользуемого <audio>
-  // сбрасывается не мгновенно, и если перематывать СРАЗУ после запуска
-  // (особенно у длинных треков), браузер иногда пытался искать позицию
-  // ещё в незагруженных данных и «залипал». Теперь перемотка разрешена
-  // только после реального прихода метаданных новой дорожки.
   let trackReady = false;
   audioEl.addEventListener('loadedmetadata', function(){ trackReady = true; });
   audioEl.addEventListener('error', function(){
-    // если аудио всё же «упало» — пробуем аккуратно перезапустить с той же позиции
     if(squareTrackId === null) return;
     const savedTime = audioEl.currentTime || 0;
     const src = audioEl.src;
@@ -988,16 +1015,16 @@
     squareZone.classList.remove('playing');
     playerWrap.classList.remove('floating');
     stopVisualizer();
-    const chipImg = squareZone.querySelector('.chip img');
-    if(chipImg) chipImg.style.transform = '';
+    const chip = squareTrackId !== null ? getChip(squareTrackId) : null;
+    if(chip) resetChipVisualFx(chip);
   });
   audioEl.addEventListener('ended', function(){
     playPauseIcon.src = 'ui/play.png';
     squareZone.classList.remove('playing');
     playerWrap.classList.remove('floating');
     stopVisualizer();
-    const chipImg = squareZone.querySelector('.chip img');
-    if(chipImg) chipImg.style.transform = '';
+    const chip = squareTrackId !== null ? getChip(squareTrackId) : null;
+    if(chip) resetChipVisualFx(chip);
   });
   audioEl.addEventListener('timeupdate', function(){
     const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
@@ -1016,7 +1043,7 @@
   window.addEventListener('mousemove', function(e){
     if(!scrubbing) return;
     const now = performance.now();
-    if(now - lastSeekAt < 70) return; // не дёргаем currentTime слишком часто во время протаскивания
+    if(now - lastSeekAt < 70) return;
     lastSeekAt = now;
     seekFromEvent(e);
   });
@@ -1031,26 +1058,28 @@
   });
 
   /* ==========================================================
-     ВИЗУАЛИЗАЦИЯ ЧАСТОТ
+     ВИЗУАЛИЗАЦИЯ ЧАСТОТ — считываем ровно 2 диапазона:
+       диапазон 1: 20–116 Гц   (низкие, самый чувствительный —
+                                 сильно «раздувает» палочки при
+                                 всплеске, и им же управляется зум)
+       диапазон 2: 1000–2000 Гц (более «населённый» в реальных
+                                 треках — задаёт постоянное,
+                                 непрерывное движение по всей
+                                 картине)
      101 палочка на грань (первая/последняя чуть выступают за
-     угол); низ и лево инвертированы (низкие частоты — к правому
-     нижнему углу). Нормализация — по 4 отдельным полосам спектра
-     со своим адаптивным «потолком» на каждую, чтобы верх спектра
-     не проседал. Свечение — отдельным проходом позади (много
-     мягких полупрозрачных палочек с блюром, без единого сплошного
-     блока), не красит сами палочки. Область визуализации сильно
-     расширена — частицам и свечению есть куда улетать, и они
-     плавно гаснут по мере удаления от квадрата.
+     угол); низ и лево инвертированы. Свечение — тень той же
+     заливки, сильнее размыта, чем раньше. Частицы — из
+     невидимого круга позади картинки, рисуются ДО палочек
+     (т.е. позади них).
      ========================================================== */
   let audioCtx = null, analyser = null, sourceNode = null, rafId = null;
 
-  const WRAP_SIZE     = 1040;
-  const SQUARE_SIZE   = 680;
-  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 180 — простор для частиц (летят на 200px)
-  const BAR_MARGIN    = 80;  // как далеко может вытягиваться сама чёткая палочка
+  const WRAP_SIZE     = 1100;
+  const SQUARE_SIZE   = 760;
+  const EFFECT_MARGIN = (WRAP_SIZE - SQUARE_SIZE) / 2; // 170
+  const BAR_MARGIN    = 80;
   const BARS_PER_SIDE = 101;
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
-  const CENTER        = WRAP_SIZE / 2;
 
   const vizCanvas = document.getElementById('vizCanvas');
   const dpr = window.devicePixelRatio || 1;
@@ -1059,17 +1088,34 @@
   const vctx = vizCanvas.getContext('2d');
   vctx.scale(dpr, dpr);
 
+  // границы бинов для двух диапазонов — считаются один раз, когда
+  // становится известна реальная частота дискретизации
+  let RANGE1_LO = 0, RANGE1_HI = 2, RANGE2_LO = 20, RANGE2_HI = 40;
+
   function ensureAudioGraph(){
     if(!audioCtx){
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(audioEl);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      analyser.smoothingTimeConstant = 0.8;
+      analyser.fftSize = 2048; // выше разрешение — нужно точно попасть в диапазон 20-116 Гц
+      analyser.smoothingTimeConstant = 0.75;
       sourceNode.connect(analyser);
       analyser.connect(audioCtx.destination);
+
+      const binHz = audioCtx.sampleRate / analyser.fftSize;
+      RANGE1_LO = Math.max(0, Math.round(20 / binHz));
+      RANGE1_HI = Math.max(RANGE1_LO + 1, Math.round(116 / binHz));
+      RANGE2_LO = Math.round(1000 / binHz);
+      RANGE2_HI = Math.max(RANGE2_LO + 1, Math.round(2000 / binHz));
     }
     if(audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function rangeMax(data, lo, hi){
+    let m = 0;
+    const end = Math.min(hi, data.length - 1);
+    for(let i = lo; i <= end; i++){ if(data[i] > m) m = data[i]; }
+    return m;
   }
 
   function resample(data, targetLen){
@@ -1081,59 +1127,19 @@
     return out;
   }
 
-  function smoothstep(edge0, edge1, x){
-    const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
-    return t * t * (3 - 2 * t);
-  }
+  const SPECTRUM_FLOOR = 0.22;
+  let range2Ceiling = 30;
+  let range1Ceiling = 20;
 
-  // авто-нормализация по 4 отдельным полосам спектра (у каждой свой
-  // адаптивный «потолок»), чтобы высокие частоты не проседали
-  // относительно низких — картинка равномерно живая по всему периметру
-  const BAND_COUNT = 8;
-  const SPECTRUM_FLOOR = 0.22; // выше, чем было — нигде не должно быть заметных провалов
-  let bandCeilings = [28,28,28,28,28,28,28,28];
-  function normalizeSpectrum(rawArr){
-    const n = rawArr.length;
-    const bandSize = Math.ceil(n / BAND_COUNT);
-    const out = new Float32Array(n);
-    for(let b = 0; b < BAND_COUNT; b++){
-      const start = b * bandSize;
-      const end = Math.min(n, start + bandSize);
-      let bandMax = 0;
-      for(let i = start; i < end; i++){ if(rawArr[i] > bandMax) bandMax = rawArr[i]; }
-      if(bandMax > bandCeilings[b]) bandCeilings[b] += (bandMax - bandCeilings[b]) * 0.4;
-      else bandCeilings[b] += (bandMax - bandCeilings[b]) * 0.012;
-      if(bandCeilings[b] < 12) bandCeilings[b] = 12;
-      for(let i = start; i < end; i++){
-        let v = rawArr[i] / bandCeilings[b];
-        v = Math.pow(Math.min(1, v), 0.5);
-        out[i] = Math.min(1, v);
-      }
-    }
-    // лёгкий общий наклон (басы чуть заметнее) + высокий минимальный «пол»,
-    // чтобы нигде не было заметных провалов/пустых участков
-    for(let i = 0; i < n; i++){
-      const t = i / (n - 1);
-      let v = out[i] * (1.08 - 0.08 * t);
-      v = SPECTRUM_FLOOR + v * (1 - SPECTRUM_FLOOR);
-      out[i] = Math.min(1, v);
-    }
-    return out;
-  }
-
-  // широкое сглаживание (9 соседей) — превращает «рваный» рельеф в
-  // плавную непрерывную дугу без резких провалов между палочками
+  // широкое сглаживание (9 соседей) — плавная непрерывная дуга без провалов
   function smoothArray(arr){
     const n = arr.length;
     const out = new Float32Array(n);
     const w = [1,2,3,4,5,4,3,2,1];
-    const wSum = 25;
     for(let i = 0; i < n; i++){
       let acc = 0;
-      for(let k = -4; k <= 4; k++){
-        acc += arr[(i + k + n) % n] * w[k + 4];
-      }
-      out[i] = acc / wSum;
+      for(let k = -4; k <= 4; k++) acc += arr[(i + k + n) % n] * w[k + 4];
+      out[i] = acc / 25;
     }
     return out;
   }
@@ -1149,29 +1155,33 @@
     vctx.fill();
   }
 
-  // ---- частицы: строго со спецификацией ----
-  // вылетают строго с грани картинки (а не откуда попало вдоль всей
-  // ширины холста — раньше в этом и была причина «вылета из ниоткуда»),
-  // белые, стартовая прозрачность 85%, долетают ровно до 200px и там
-  // становятся полностью прозрачными; пока звучит бас — летят на 20%
-  // быстрее.
-  const PARTICLE_MAX_TRAVEL = 200;
-  const PARTICLE_START_ALPHA = 0.85;
+  /* ---- частицы: вылетают из невидимого круга (диаметр = грани
+     плеера) позади картинки, летят по 360°, максимум 250px, гаснут
+     к 230px, стартовая прозрачность 70%, растут в размере на 50% ---- */
+  const PARTICLE_MAX_TRAVEL = 250;
+  const PARTICLE_FADE_DIST  = 230;
+  const PARTICLE_START_ALPHA = 0.7;
+  const PARTICLE_GROWTH = 0.5;
   let particles = [];
   function spawnParticles(energy){
-    const rate = energy * 3.2;
+    const rate = energy * 3.2 * (2/3); // на треть меньше, чем раньше
     let count = Math.floor(rate);
     if(Math.random() < (rate - count)) count++;
+    const cx = EFFECT_MARGIN + SQUARE_SIZE / 2;
+    const cy = EFFECT_MARGIN + SQUARE_SIZE / 2;
+    const r = SQUARE_SIZE / 2; // невидимый круг спрятан за картинкой (её же диаметра)
     for(let i = 0; i < count; i++){
-      const side = Math.floor(Math.random() * 4);
-      let x, y, vx, vy;
-      // x/y ограничены именно шириной/высотой квадрата (EFFECT_MARGIN..EFFECT_MARGIN+SQUARE_SIZE),
-      // а не всем холстом — иначе точка вылета оказывалась в пустоте рядом с картинкой
-      if(side === 0){ x = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; y = EFFECT_MARGIN; vx=(Math.random()-0.5)*0.5; vy=-Math.random()*1.3-0.4; }
-      else if(side === 1){ x = EFFECT_MARGIN + SQUARE_SIZE; y = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; vx=Math.random()*1.3+0.4; vy=(Math.random()-0.5)*0.5; }
-      else if(side === 2){ x = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; y = EFFECT_MARGIN + SQUARE_SIZE; vx=(Math.random()-0.5)*0.5; vy=Math.random()*1.3+0.4; }
-      else{ x = EFFECT_MARGIN; y = EFFECT_MARGIN + Math.random()*SQUARE_SIZE; vx=-Math.random()*1.3-0.4; vy=(Math.random()-0.5)*0.5; }
-      particles.push({ x:x, y:y, vx:vx, vy:vy, size:Math.random()*2.2+1.6, startX:x, startY:y });
+      const angle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 0.9 + 0.4;
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      particles.push({
+        x:x, y:y,
+        vx:Math.cos(angle) * speed,
+        vy:Math.sin(angle) * speed,
+        baseSize:Math.random() * 1.6 + 1.2,
+        startX:x, startY:y
+      });
     }
   }
   function updateAndDrawParticles(bassActive){
@@ -1183,83 +1193,92 @@
       p.x += p.vx * speedMult;
       p.y += p.vy * speedMult;
       const traveled = Math.hypot(p.x - p.startX, p.y - p.startY);
-      if(traveled >= PARTICLE_MAX_TRAVEL){
-        particles.splice(i, 1);
-        continue;
+      if(traveled >= PARTICLE_MAX_TRAVEL){ particles.splice(i, 1); continue; }
+      const alpha = PARTICLE_START_ALPHA * Math.max(0, 1 - traveled / PARTICLE_FADE_DIST);
+      if(alpha > 0.008){
+        const size = p.baseSize * (1 + PARTICLE_GROWTH * (traveled / PARTICLE_MAX_TRAVEL));
+        vctx.globalAlpha = alpha;
+        vctx.beginPath();
+        vctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+        vctx.fill();
       }
-      const alpha = PARTICLE_START_ALPHA * (1 - traveled / (PARTICLE_MAX_TRAVEL * 0.85));
-      vctx.globalAlpha = alpha;
-      vctx.beginPath();
-      vctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      vctx.fill();
     }
     vctx.globalAlpha = 1;
-
   }
 
-  // ---- зум обложки на басах: реагирует на УДАРЫ (превышение над
-  // недавним средним уровнем баса), а не на абсолютную громкость —
-  // раньше он почти сразу вылетал в максимум и там и оставался,
-  // т.к. бас в миксе присутствует почти постоянно ----
-  function getBassRaw(rawData){
-    const n = Math.min(10, rawData.length);
-    let sum = 0;
-    for(let i = 0; i < n; i++) sum += rawData[i];
-    return (sum / n) / 255;
-  }
-
-  // ---- зум обложки: чёткий детектор удара баса (резкий скачок между
-  // соседними кадрами), а не медленное среднее. Поэтому картинка
-  // большую часть времени в исходном размере и лишь быстро «дёргается»
-  // ровно в момент удара, тут же плавно возвращаясь обратно ----
-  let prevBassRaw = 0;
+  /* ---- зум обложки: чёткий детектор удара по диапазону 1
+     (20-116 Гц) — резкий скачок между соседними кадрами даёт
+     быстрый лёгкий «щелчок» зума с мгновенным плавным спадом,
+     плюс синхронный лёгкий блум ---- */
+  let prevRange1Level = 0;
   let zoomEnvelope = 0;
-  const BASS_ONSET_THRESHOLD = 0.06;
-  function updateBassZoom(bassRaw){
-    const delta = bassRaw - prevBassRaw;
+  const BASS_ONSET_THRESHOLD = 0.05;
+  function updateBassZoom(range1Level){
+    const delta = range1Level - prevRange1Level;
     if(delta > BASS_ONSET_THRESHOLD) zoomEnvelope = 1;
-    zoomEnvelope *= 0.82; // быстрый спад назад к исходному размеру
-    prevBassRaw = bassRaw;
+    zoomEnvelope *= 0.82;
+    prevRange1Level = range1Level;
 
+    if(squareTrackId === null) return;
     const chipImg = squareZone.querySelector('.chip img');
     if(chipImg){
       const scale = 1 + zoomEnvelope * 0.04;
       chipImg.style.transform = 'scale(' + scale.toFixed(4) + ')';
+      chipImg.style.filter = zoomEnvelope > 0.015 ? ('brightness(' + (1 + zoomEnvelope * 0.22).toFixed(3) + ')') : '';
     }
   }
 
-  const BASS_ACTIVE_THRESHOLD = 0.16; // выше этого — считаем, что «звучит бас» (для скорости частиц)
-
   function drawFrame(rawData){
-    const bassRaw = getBassRaw(rawData);
-    const bassActive = bassRaw > BASS_ACTIVE_THRESHOLD;
+    const range1Max = rangeMax(rawData, RANGE1_LO, RANGE1_HI);
+    const range2Max = rangeMax(rawData, RANGE2_LO, RANGE2_HI);
+    const range2Slice = rawData.slice(RANGE2_LO, RANGE2_HI + 1);
+    const range2Resampled = resample(range2Slice.length ? range2Slice : new Uint8Array(1), BARS_PER_SIDE);
 
-    let norm = normalizeSpectrum(resample(rawData, BARS_PER_SIDE));
+    if(range2Max > range2Ceiling) range2Ceiling += (range2Max - range2Ceiling) * 0.4;
+    else range2Ceiling += (range2Max - range2Ceiling) * 0.015;
+    range2Ceiling = Math.max(range2Ceiling, 10);
+
+    if(range1Max > range1Ceiling) range1Ceiling += (range1Max - range1Ceiling) * 0.4;
+    else range1Ceiling += (range1Max - range1Ceiling) * 0.02;
+    range1Ceiling = Math.max(range1Ceiling, 8);
+
+    const range1Level = Math.pow(Math.min(1, range1Max / range1Ceiling), 0.5);
+    const bassActive = range1Level > 0.35;
+
+    let norm = new Float32Array(BARS_PER_SIDE);
+    for(let i = 0; i < BARS_PER_SIDE; i++){
+      let v = range2Resampled[i] / range2Ceiling;
+      norm[i] = Math.pow(Math.min(1, v), 0.5);
+    }
     norm = smoothArray(norm);
 
-    const arrDirect   = new Float32Array(BARS_PER_SIDE); // низкие частоты — у первого индекса
-    const arrReversed = new Float32Array(BARS_PER_SIDE); // низкие частоты — у последнего индекса
+    const finalValue = new Float32Array(BARS_PER_SIDE);
     for(let i = 0; i < BARS_PER_SIDE; i++){
       const shape = 0.45 + 0.55 * Math.sin(Math.PI * i / (BARS_PER_SIDE - 1));
-      arrDirect[i]   = norm[i] * shape;
-      arrReversed[i] = norm[BARS_PER_SIDE - 1 - i] * shape;
+      let v = SPECTRUM_FLOOR + norm[i] * (1 - SPECTRUM_FLOOR);
+      v = Math.min(1, v + range1Level * 0.85); // сильный буст-всплеск от первого диапазона
+      finalValue[i] = v * shape;
     }
+    const arrDirect = finalValue;
+    const arrReversed = new Float32Array(BARS_PER_SIDE);
+    for(let i = 0; i < BARS_PER_SIDE; i++) arrReversed[i] = finalValue[BARS_PER_SIDE - 1 - i];
 
     vctx.clearRect(0, 0, WRAP_SIZE, WRAP_SIZE);
 
-    const gap = 1.4;
+    const energy = finalValue.reduce(function(a,b){ return a+b; }, 0) / finalValue.length;
+
+    // частицы рисуются ПЕРВЫМИ — визуально позади палочек
+    spawnParticles(energy);
+    updateAndDrawParticles(bassActive);
+
+    const gap = 2.4; // было 1.4 — расстояние между палочками +1px
     const barW = Math.max(1, BASE_STEP - gap);
     const maxLen = BAR_MARGIN - 6;
     const radius = barW / 2;
 
-    // Верх: бас слева. Право: бас снизу. Низ: бас справа. Лево: бас сверху.
     const topArr = arrDirect, rightArr = arrReversed, bottomArr = arrReversed, leftArr = arrDirect;
 
-    // Один проход: у каждой палочки — тень (glow) её же цвета, только
-    // светлее и полупрозрачнее. Т.к. это тень ЭТОЙ ЖЕ заливки, она
-    // мягко размывается вокруг неё же (никаких «дублирующих» полосок
-    // другого оттенка), а сама заливка рисуется поверх — чёткая и чистая.
-    vctx.shadowBlur = 14;
+    vctx.shadowBlur = 26; // ещё сильнее размыто, чем раньше
     for(let i = 0; i < BARS_PER_SIDE; i++){
       const t = i / (BARS_PER_SIDE - 1);
       const barColor = lerpColor(currentVizColors[0], currentVizColors[1], t);
@@ -1268,22 +1287,18 @@
       vctx.fillStyle = rgbStr(barColor);
 
       const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP;
-      let len = Math.max(2, topArr[i] * maxLen);
+      let len = Math.max(2, Math.min(maxLen, topArr[i] * maxLen));
       roundedBar(pos, EFFECT_MARGIN - len, barW, len, radius);
-      len = Math.max(2, rightArr[i] * maxLen);
+      len = Math.max(2, Math.min(maxLen, rightArr[i] * maxLen));
       roundedBar(EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);
-      len = Math.max(2, bottomArr[i] * maxLen);
+      len = Math.max(2, Math.min(maxLen, bottomArr[i] * maxLen));
       roundedBar(pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);
-      len = Math.max(2, leftArr[i] * maxLen);
+      len = Math.max(2, Math.min(maxLen, leftArr[i] * maxLen));
       roundedBar(EFFECT_MARGIN - len, pos, len, barW, radius);
     }
     vctx.shadowBlur = 0;
 
-    const energy = norm.reduce(function(a,b){ return a+b; }, 0) / norm.length;
-    spawnParticles(energy);
-    updateAndDrawParticles(bassActive);
-
-    updateBassZoom(bassRaw);
+    updateBassZoom(range1Level);
   }
 
   function startVisualizer(){
@@ -1327,6 +1342,8 @@
 
   /* ==========================================================
      ОТПРАВКА ОТВЕТОВ
+     Неактивные зоны (active:false в PARTICIPANTS) не участвуют
+     в проверке равномерности распределения.
      ========================================================== */
   const fairnessModal = document.getElementById('fairnessModal');
   const fairnessText  = document.getElementById('fairnessText');
@@ -1346,8 +1363,10 @@
     }
 
     const unfair = [];
-    for(let z = 1; z <= 9; z++){
-      if(zoneAssignments[z].length <= 1) unfair.push(ZONE_NAMES[z-1]);
+    for(let z = 1; z <= 10; z++){
+      const p = PARTICIPANTS[z-1];
+      if(!p || !p.active) continue; // неактивные зоны не проверяем
+      if((zoneAssignments[z] || []).length <= 1) unfair.push(p.name);
     }
     if(unfair.length > 0){
       fairnessText.textContent = 'У участников (' + unfair.join(', ') + ') 0 или 1 трек. Постарайтесь распределить треки более равномерно — сейчас это не по правилам.';
