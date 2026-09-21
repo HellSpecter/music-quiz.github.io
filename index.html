@@ -1121,24 +1121,36 @@
   const BASE_STEP     = SQUARE_SIZE / (BARS_PER_SIDE - 2);
 
   /* --- ГЛАВНЫЕ РУЧКИ НАСТРОЙКИ ------------------------------
-     FLOOR — что считать тишиной (0..1 от шкалы FFT). Всё ниже
-             порога = палочка лежит.
-     GAIN  — во сколько раз растянуть остаток до максимума.
-     Если верхний слой еле шевелится — поднимите HIGH_GAIN или
-     опустите HIGH_FLOOR. Если низ постоянно в потолке — поднимите
-     LOW_FLOOR (например до 0.60) или уменьшите LOW_GAIN.        */
-  const LOW_FLOOR  = 0.30, LOW_GAIN  = 1.1; // 20-116 Гц
-  const HIGH_FLOOR = 0.30, HIGH_GAIN = 1.2; // 1000-2000 Гц
-  // SHARPNESS > 1 «заостряет» пик: значения около максимума почти не
-  // меняются, а вот соседние (чуть ниже) палочки становятся заметно
-  // короче — вместо плоского «плато» из нескольких воткнувшихся в
-  // потолок палочек получается один явный пик с покатыми склонами.
-  // Чем больше число — тем острее пик и тем реже он упирается в потолок.
-  const LOW_SHARPNESS  = 3.0; // низкие — самая частая причина плато, поэтому резкость выше
-  const HIGH_SHARPNESS = 1.0;
-  const SMOOTH     = 0.55;                   // сглаживание кадров, 0 = совсем без него
-  const MAX_BAR_LOW  = 300;  // максимальная длина палочки низов
-  const MAX_BAR_HIGH = 200;  // максимальная длина палочки верхов
+     Длина палочки считается в ПИКСЕЛЯХ и от максимальной длины
+     не зависит:
+
+       длина = (громкость в дБ − FLOOR_DB) × SENS
+
+     FLOOR_DB — порог тишины в децибелах. Всё тише — палочка лежит.
+                Чем НИЖЕ число (−90), тем раньше палочки оживают.
+     SENS     — ЧУВСТВИТЕЛЬНОСТЬ: сколько пикселей даёт каждый дБ
+                сверх порога. Это главная ручка «как сильно тянутся
+                палочки». Меньше число — спокойнее слой.
+     MAX_BAR  — только потолок. Увеличение MAX_BAR НЕ делает
+                обычные палочки длиннее, оно лишь даёт громким
+                пикам больше места.
+     KNEE     — доля от MAX_BAR (0..1), выше которой включается
+                мягкое «торможение»: палочка продолжает расти, но
+                всё медленнее и медленнее и никогда не достигает
+                MAX_BAR. Ниже KNEE — рост строго линейный.
+                Меньше KNEE → раньше тормозит и тем меньше плато.
+
+     Пример для низов с числами ниже: обычный бас (−30 дБ) даёт
+     (−30 − −75) × 3.2 = 144 px ≈ половина потолка. Очень громкий
+     удар (−12 дБ) даёт «сырые» 202 px → после торможения ~176 px.
+     Потолок 300 px не достигается никогда.                       */
+  const LOW_FLOOR_DB  = -75, LOW_SENS  = 3.2; // 20-116 Гц
+  const HIGH_FLOOR_DB = -85, HIGH_SENS = 2.4; // 1000-2000 Гц
+  const LOW_KNEE  = 0.45;
+  const HIGH_KNEE = 0.50;
+  const SMOOTH     = 0.55;  // сглаживание кадров, 0 = совсем без него
+  const MAX_BAR_LOW  = 300; // потолок палочки низов, px
+  const MAX_BAR_HIGH = 200; // потолок палочки верхов, px
   const GLOW_BLUR  = 15;    // радиус общего свечения, px
   const GLOW_ALPHA = 0.9;   // яркость общего свечения
 
@@ -1198,8 +1210,8 @@
     if(audioCtx.state === 'suspended') audioCtx.resume();
   }
 
-  // линейная интерполяция диапазона бинов в 101 палочку
-  // (не сглаживание — просто честная растяжка спектра по ширине грани)
+  // линейная интерполяция диапазона бинов в 101 палочку (в дБ).
+  // Тишина в данных приходит как -Infinity — заменяем на -200 дБ.
   function resampleRange(data, lo, hi, out){
     const n = out.length;
     const span = hi - lo;
@@ -1208,17 +1220,25 @@
       const i0 = Math.floor(p);
       const i1 = Math.min(hi, i0 + 1);
       const f = p - i0;
-      out[i] = (data[i0] * (1 - f) + data[i1] * f) / 255;
+      let a = data[i0], b = data[i1];
+      if(!isFinite(a)) a = -200;
+      if(!isFinite(b)) b = -200;
+      out[i] = a * (1 - f) + b * f;
     }
   }
 
-  function mapLevel(x, floor, gain, sharpness){
-    let v = (x - floor) / (1 - floor);
-    if(v <= 0) return 0;
-    v *= gain;
-    if(v > 1) v = 1;
-    if(sharpness && sharpness !== 1) v = Math.pow(v, sharpness);
-    return v;
+  // дБ -> длина палочки в пикселях.
+  // До «колена» — строго линейно (SENS пикселей на каждый дБ),
+  // выше колена — асимптотическое торможение к maxLen: наклон в точке
+  // колена совпадает с линейным участком, поэтому излома не видно,
+  // а потолок недостижим (1 - e^-x никогда не равно 1).
+  function dbToLength(db, floorDb, sens, maxLen, knee){
+    const raw = (db - floorDb) * sens;
+    if(raw <= 0) return 0;
+    const k = maxLen * knee;
+    if(raw <= k) return raw;
+    const room = maxLen - k;
+    return k + room * (1 - Math.exp(-(raw - k) / room));
   }
 
   const lowRaw   = new Float32Array(BARS_PER_SIDE);
@@ -1291,30 +1311,26 @@
     if(!ZOOM_ENABLED) return;
   }
 
-  /* ---- один слой палочек по всем четырём граням ---- */
-  function drawLayer(state, maxLen, barW, colorFn){
-    const half = barW / 2;
-    const radius = Math.min(half, 3);
+  /* ---- один слой палочек по всем четырём граням ----
+     state — длины палочек уже в пикселях */
+  function drawLayer(state, barW, colorFn){
+    const radius = Math.min(barW / 2, 3);
     for(let i = 0; i < BARS_PER_SIDE; i++){
       const t = i / (BARS_PER_SIDE - 1);
       const iRev = BARS_PER_SIDE - 1 - i;
-      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2 - (BASE_STEP - barW) / 2;
-      const posC = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2;
+      const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2;
 
       // верх и лево — прямой градиент
       bctx.fillStyle = colorFn(t);
-      let len = Math.max(2, state[i] * maxLen);
-      roundedBar(bctx, posC, EFFECT_MARGIN - len, barW, len, radius);          // верх
-      len = Math.max(2, state[i] * maxLen);
-      roundedBar(bctx, EFFECT_MARGIN - len, posC, len, barW, radius);          // лево
+      let len = Math.max(2, state[i]);
+      roundedBar(bctx, pos, EFFECT_MARGIN - len, barW, len, radius);          // верх
+      roundedBar(bctx, EFFECT_MARGIN - len, pos, len, barW, radius);          // лево
 
       // право и низ — обратный порядок палочек и инвертированный градиент
       bctx.fillStyle = colorFn(1 - t);
-      len = Math.max(2, state[iRev] * maxLen);
-      roundedBar(bctx, EFFECT_MARGIN + SQUARE_SIZE, posC, len, barW, radius);  // право
-      len = Math.max(2, state[iRev] * maxLen);
-      roundedBar(bctx, posC, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);  // низ
-      void pos;
+      len = Math.max(2, state[iRev]);
+      roundedBar(bctx, EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);  // право
+      roundedBar(bctx, pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);  // низ
     }
   }
 
@@ -1324,12 +1340,12 @@
 
     let lowSum = 0, highSum = 0;
     for(let i = 0; i < BARS_PER_SIDE; i++){
-      const lowTarget  = mapLevel(lowRaw[i],  LOW_FLOOR,  LOW_GAIN,  LOW_SHARPNESS);
-      const highTarget = mapLevel(highRaw[i], HIGH_FLOOR, HIGH_GAIN, HIGH_SHARPNESS);
+      const lowTarget  = dbToLength(lowRaw[i],  LOW_FLOOR_DB,  LOW_SENS,  MAX_BAR_LOW,  LOW_KNEE);
+      const highTarget = dbToLength(highRaw[i], HIGH_FLOOR_DB, HIGH_SENS, MAX_BAR_HIGH, HIGH_KNEE);
       lowState[i]  = lowState[i]  * SMOOTH + lowTarget  * (1 - SMOOTH);
       highState[i] = highState[i] * SMOOTH + highTarget * (1 - SMOOTH);
-      lowSum  += lowState[i];
-      highSum += highState[i];
+      lowSum  += lowState[i]  / MAX_BAR_LOW;
+      highSum += highState[i] / MAX_BAR_HIGH;
     }
     const lowEnergy = lowSum / BARS_PER_SIDE;
     const energy    = (lowSum + highSum) / (2 * BARS_PER_SIDE);
@@ -1342,12 +1358,12 @@
     const barW = Math.max(1, BASE_STEP - 2.4);
 
     // СЛОЙ 1 (задний): низкие частоты (басы) — теперь позади, а не спереди
-    drawLayer(lowState, MAX_BAR_LOW, barW, function(t){
+    drawLayer(lowState, barW, function(t){
       return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
     });
 
     // СЛОЙ 2 (передний): верхние частоты — поверх низких
-    drawLayer(highState, MAX_BAR_HIGH, barW, function(t){
+    drawLayer(highState, barW, function(t){
       return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
     });
 
@@ -1390,10 +1406,13 @@
 
   function startVisualizer(){
     if(!analyser) return;
-    const data = new Uint8Array(analyser.frequencyBinCount);
+    // именно float-данные в настоящих дБ: байтовые данные обрезаются
+    // на maxDecibels (-30 дБ) до 255, и всё громче -30 дБ становилось
+    // одинаковым максимумом — это и было «плато»
+    const data = new Float32Array(analyser.frequencyBinCount);
     function draw(){
       rafId = requestAnimationFrame(draw);
-      analyser.getByteFrequencyData(data);
+      analyser.getFloatFrequencyData(data);
       drawFrame(data);
     }
     draw();
