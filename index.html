@@ -165,7 +165,7 @@
     background:var(--surface);
     border:1px solid var(--border-neutral);
     border-radius:14px;
-    height:56px; width:290px;
+    height:56px; width:400px;
     padding:0 16px;
     flex:0 0 auto;
   }
@@ -998,6 +998,7 @@
   // (см. ниже, в drawFrame) — а холст всегда позади самой картинки.
   function applyGlow(){
     squareZone.style.boxShadow = 'none';
+    imgGlowReady = false; // цвета поменялись — свечение перерисуется на следующем кадре
   }
 
   function playTrack(id){
@@ -1144,9 +1145,9 @@
      (−30 − −75) × 3.2 = 144 px ≈ половина потолка. Очень громкий
      удар (−12 дБ) даёт «сырые» 202 px → после торможения ~176 px.
      Потолок 300 px не достигается никогда.                       */
-  const LOW_FLOOR_DB  = -75, LOW_SENS  = 3.0; // 20-116 Гц
-  const HIGH_FLOOR_DB = -85, HIGH_SENS = 2.0; // 1000-2000 Гц
-  const LOW_KNEE  = 0.60;
+  const LOW_FLOOR_DB  = -75, LOW_SENS  = 3.2; // 20-116 Гц
+  const HIGH_FLOOR_DB = -85, HIGH_SENS = 2.4; // 1000-2000 Гц
+  const LOW_KNEE  = 0.45;
   const HIGH_KNEE = 0.50;
   const SMOOTH     = 0.55;  // сглаживание кадров, 0 = совсем без него
   const MAX_BAR_LOW  = 300; // потолок палочки низов, px
@@ -1154,7 +1155,56 @@
   const GLOW_BLUR  = 15;    // радиус общего свечения, px
   const GLOW_ALPHA = 0.9;   // яркость общего свечения
 
-  const ZOOM_ENABLED = false; // зум обложки временно заморожен
+  /* --- СВЕЧЕНИЕ КАРТИНКИ (квадратное, самый задний слой) ------- */
+  const IMG_GLOW_BLUR  = 45;   // размытие, px — насколько далеко расходится
+  const IMG_GLOW_ALPHA = 0.55; // яркость в покое
+  const IMG_GLOW_SPREAD = 6;   // на сколько px квадрат свечения больше картинки
+
+  /* --- ЭКСПЕРИМЕНТ: ПРИЖАТИЕ УГЛОВЫХ ПАЛОЧЕК ---------------------
+     Первые и последние палочки каждой грани плавно прижимаются
+     к нулю, чтобы на углах квадрата не торчали длинные палочки.
+     CORNER_TAPER_BARS — сколько палочек с каждого края затрагивается
+     CORNER_TAPER_MIN  — множитель для самой крайней палочки (0 = в ноль)
+     Кривая плавная (S-образная), поэтому ступеньки не видно.         */
+  const CORNER_TAPER_ENABLED = true;
+  const CORNER_TAPER_BARS    = 14;
+  const CORNER_TAPER_MIN     = 0.0;
+
+  /* --- ЗУМ И БЛУМ ОБЛОЖКИ ------------------------------------------
+     ZOOM_ENABLED — общий выключатель.
+     ZOOM_MODE:
+       'hold'  — «удержание»: пока бас громче ZOOM_ON_DB, картинка
+                 приближена; долгий бас = долгий зум, прерывистый бас
+                 = несколько зумов. Выключается, только когда бас
+                 падает ниже ZOOM_OFF_DB (зазор между порогами убирает
+                 мерцание на границе) и не раньше ZOOM_MIN_HOLD_MS.
+       'pulse' — «толчок»: на каждый резкий удар баса (скачок громкости
+                 на ZOOM_PULSE_JUMP_DB выше недавнего фона) короткий
+                 плавный толчок; не чаще раза в ZOOM_PULSE_COOLDOWN_MS.
+     Громкость баса — самая громкая частота в диапазоне 20-116 Гц, дБ.
+     ZOOM_AMOUNT  — сила приближения (0.025 = +2.5%)
+     BLOOM_AMOUNT — сила подсветки (0.08 = +8% яркости)             */
+  const ZOOM_ENABLED = true;
+  const ZOOM_MODE    = 'hold';      // 'hold' или 'pulse'
+  const ZOOM_AMOUNT  = 0.025;
+  const BLOOM_AMOUNT = 0.08;
+  // режим 'hold'
+  const ZOOM_ON_DB        = -31;    // включить зум, когда бас громче
+  const ZOOM_OFF_DB       = -37;    // выключить, когда бас тише
+  const ZOOM_MIN_HOLD_MS  = 160;    // минимальная длительность одного зума
+  const ZOOM_ATTACK_MS    = 90;     // как быстро приближается
+  const ZOOM_RELEASE_MS   = 320;    // как плавно отпускает
+  // режим 'pulse'
+  const ZOOM_PULSE_JUMP_DB     = 7;    // насколько удар громче фона
+  const ZOOM_PULSE_MIN_DB      = -38;  // тише этого удары не считаются
+  const ZOOM_PULSE_COOLDOWN_MS = 230;  // минимальная пауза между толчками
+  const ZOOM_PULSE_REARM_DB    = 6;    // на сколько бас должен спасть до следующего толчка
+  const ZOOM_PULSE_ATTACK_MS   = 45;
+  const ZOOM_PULSE_DECAY_MS    = 260;
+  // ОТЛАДКА: true — в левом нижнем углу виден текущий уровень баса в дБ
+  // и сила зума. Включите, послушайте свои треки и подберите пороги
+  // выше (обычно ON ставят чуть ниже громких ударов, OFF на 5-7 дБ ниже).
+  const ZOOM_DEBUG = false;
 
   // холст шире обёртки, чтобы частицы не обрезались о его край
   const CANVAS_PAD  = 160;
@@ -1306,9 +1356,128 @@
     vctx.globalAlpha = 1;
   }
 
-  /* ---- зум обложки (временно заморожен флагом ZOOM_ENABLED) ---- */
-  function updateBassZoom(){
-    if(!ZOOM_ENABLED) return;
+  /* ---- зум и блум обложки ----
+     envelope 0..1 — насколько сейчас «приближено». Всё считается по
+     реальному времени кадра (dt), поэтому скорость не зависит от
+     частоты обновления монитора. */
+  let zoomEnv = 0;           // текущее значение 0..1
+  let zoomOn = false;        // для 'hold'
+  let zoomOnSince = 0;
+  let pulseTarget = 0;       // для 'pulse'
+  let bassBaselineDb = -60;  // «фон» баса для детектора ударов
+  let lastPulseAt = -1e9;
+  let lastFrameAt = 0;
+  let lastAppliedZoom = -1;
+  let zoomDebugEl = null;
+  let pulseArmed = true;
+  let pulsePeakDb = -200;
+
+  function resetZoomState(){
+    zoomEnv = 0; zoomOn = false; zoomOnSince = 0;
+    pulseTarget = 0; bassBaselineDb = -60; lastPulseAt = -1e9;
+    lastFrameAt = 0; lastAppliedZoom = -1;
+    pulseArmed = true; pulsePeakDb = -200;
+  }
+
+  // плавное движение к цели с постоянной времени tauMs
+  function approach(cur, target, tauMs, dt){
+    return cur + (target - cur) * (1 - Math.exp(-dt / Math.max(1, tauMs)));
+  }
+
+  function updateBassZoom(bassDb, now, dt){
+    if(!ZOOM_ENABLED || squareTrackId === null) return;
+
+    if(ZOOM_MODE === 'pulse'){
+      const jump = bassDb - bassBaselineDb;
+      // «перевзвод»: после толчка следующий возможен, только когда бас
+      // спал хотя бы на ZOOM_PULSE_REARM_DB — иначе нарастание одного
+      // удара давало бы несколько толчков подряд (мерцание)
+      if(!pulseArmed && bassDb < pulsePeakDb - ZOOM_PULSE_REARM_DB) pulseArmed = true;
+      if(!pulseArmed && bassDb > pulsePeakDb) pulsePeakDb = bassDb;
+      if(pulseArmed && jump > ZOOM_PULSE_JUMP_DB && bassDb > ZOOM_PULSE_MIN_DB &&
+         now - lastPulseAt > ZOOM_PULSE_COOLDOWN_MS){
+        lastPulseAt = now;
+        pulseArmed = false;
+        pulsePeakDb = bassDb;
+        // сила толчка зависит от силы удара, но не выше 1
+        pulseTarget = Math.min(1, 0.55 + (jump - ZOOM_PULSE_JUMP_DB) / 12);
+      }
+      // фон медленно следует за басом (только для поиска ударов)
+      bassBaselineDb = approach(bassBaselineDb, bassDb, 300, dt);
+      pulseTarget = approach(pulseTarget, 0, ZOOM_PULSE_DECAY_MS, dt);
+      zoomEnv = approach(zoomEnv, pulseTarget, ZOOM_PULSE_ATTACK_MS, dt);
+    } else {
+      if(!zoomOn && bassDb > ZOOM_ON_DB){
+        zoomOn = true; zoomOnSince = now;
+      } else if(zoomOn && bassDb < ZOOM_OFF_DB && now - zoomOnSince > ZOOM_MIN_HOLD_MS){
+        zoomOn = false;
+      }
+      const target = zoomOn ? 1 : 0;
+      zoomEnv = approach(zoomEnv, target, target > zoomEnv ? ZOOM_ATTACK_MS : ZOOM_RELEASE_MS, dt);
+    }
+
+    if(ZOOM_DEBUG){
+      if(!zoomDebugEl){
+        zoomDebugEl = document.createElement('div');
+        zoomDebugEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:500;font:12px monospace;color:#fff;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:6px;pointer-events:none';
+        document.body.appendChild(zoomDebugEl);
+      }
+      zoomDebugEl.textContent = 'бас ' + bassDb.toFixed(1) + ' дБ | зум ' + zoomEnv.toFixed(2) + ' | ' + ZOOM_MODE;
+    }
+
+    // в DOM пишем только при заметном изменении — меньше перерисовок
+    if(Math.abs(zoomEnv - lastAppliedZoom) < 0.002) return;
+    lastAppliedZoom = zoomEnv;
+    const chipImg = squareZone.querySelector('.chip img');
+    if(!chipImg) return;
+    if(zoomEnv < 0.004){
+      chipImg.style.transform = '';
+      chipImg.style.filter = '';
+    } else {
+      chipImg.style.transform = 'scale(' + (1 + ZOOM_AMOUNT * zoomEnv).toFixed(4) + ')';
+      chipImg.style.filter = 'brightness(' + (1 + BLOOM_AMOUNT * zoomEnv).toFixed(4) + ')';
+    }
+  }
+
+  /* ---- множители прижатия угловых палочек (считаются один раз) ---- */
+  const cornerTaper = new Float32Array(BARS_PER_SIDE);
+  for(let i = 0; i < BARS_PER_SIDE; i++){
+    const d = Math.min(i, BARS_PER_SIDE - 1 - i); // расстояние до ближайшего края
+    let f = 1;
+    if(CORNER_TAPER_ENABLED && d < CORNER_TAPER_BARS){
+      const x = d / CORNER_TAPER_BARS;          // 0 на краю .. 1 на границе зоны
+      const s = x * x * (3 - 2 * x);           // S-кривая без изломов
+      f = CORNER_TAPER_MIN + (1 - CORNER_TAPER_MIN) * s;
+    }
+    cornerTaper[i] = f;
+  }
+
+  /* ---- квадратное свечение картинки ----
+     Рендерится один раз на трек (когда известны цвета) в отдельный
+     холст, дальше каждый кадр просто копируется — размытие не
+     пересчитывается 60 раз в секунду. */
+  const imgGlowCanvas = document.createElement('canvas');
+  imgGlowCanvas.width  = vizCanvas.width;
+  imgGlowCanvas.height = vizCanvas.height;
+  const gctx = imgGlowCanvas.getContext('2d');
+  let imgGlowReady = false;
+
+  function renderImageGlow(){
+    const c0 = currentVizColors[0], c1 = currentVizColors[1];
+    gctx.setTransform(1, 0, 0, 1, 0, 0);
+    gctx.clearRect(0, 0, imgGlowCanvas.width, imgGlowCanvas.height);
+    gctx.setTransform(dpr, 0, 0, dpr, CANVAS_PAD * dpr, CANVAS_PAD * dpr);
+    const x0 = EFFECT_MARGIN - IMG_GLOW_SPREAD;
+    const size = SQUARE_SIZE + IMG_GLOW_SPREAD * 2;
+    // диагональный градиент из двух цветов обложки
+    const grad = gctx.createLinearGradient(x0, x0, x0 + size, x0 + size);
+    grad.addColorStop(0, rgbStr(lighten(c0, 0.35)));
+    grad.addColorStop(1, rgbStr(lighten(c1, 0.35)));
+    gctx.fillStyle = grad;
+    if(CAN_FILTER) gctx.filter = 'blur(' + (IMG_GLOW_BLUR * dpr) + 'px)';
+    gctx.fillRect(x0, x0, size, size);
+    gctx.filter = 'none';
+    imgGlowReady = true;
   }
 
   /* ---- один слой палочек по всем четырём граням ----
@@ -1319,24 +1488,37 @@
       const t = i / (BARS_PER_SIDE - 1);
       const iRev = BARS_PER_SIDE - 1 - i;
       const pos = EFFECT_MARGIN - BASE_STEP / 2 + i * BASE_STEP + (BASE_STEP - barW) / 2;
+      // множитель одинаков для i и iRev (кривая симметрична)
+      const taper = cornerTaper[i];
 
       // верх и лево — прямой градиент
       bctx.fillStyle = colorFn(t);
-      let len = Math.max(2, state[i]);
+      let len = Math.max(2, state[i] * taper);
       roundedBar(bctx, pos, EFFECT_MARGIN - len, barW, len, radius);          // верх
       roundedBar(bctx, EFFECT_MARGIN - len, pos, len, barW, radius);          // лево
 
       // право и низ — обратный порядок палочек и инвертированный градиент
       bctx.fillStyle = colorFn(1 - t);
-      len = Math.max(2, state[iRev]);
+      len = Math.max(2, state[iRev] * taper);
       roundedBar(bctx, EFFECT_MARGIN + SQUARE_SIZE, pos, len, barW, radius);  // право
       roundedBar(bctx, pos, EFFECT_MARGIN + SQUARE_SIZE, barW, len, radius);  // низ
     }
   }
 
   function drawFrame(rawData){
+    const now = performance.now();
+    const dt = lastFrameAt ? Math.min(100, now - lastFrameAt) : 16.7;
+    lastFrameAt = now;
+
     resampleRange(rawData, RANGE1_LO, RANGE1_HI, lowRaw);
     resampleRange(rawData, RANGE2_LO, RANGE2_HI, highRaw);
+
+    // громкость баса для зума — самая громкая частота 20-116 Гц
+    let bassDb = -200;
+    for(let b = RANGE1_LO; b <= RANGE1_HI; b++){
+      const v = rawData[b];
+      if(isFinite(v) && v > bassDb) bassDb = v;
+    }
 
     let lowSum = 0, highSum = 0;
     for(let i = 0; i < BARS_PER_SIDE; i++){
@@ -1370,24 +1552,19 @@
     // общее свечение: один размытый проход по уже готовым слоям
     clearCanvas(vctx);
 
-    // мягкое фоновое свечение самой картинки — рисуется ПЕРВЫМ, поэтому
-    // окажется позади и палочек, и их собственного свечения
-    if(squareTrackId !== null){
-      const cx = EFFECT_MARGIN + SQUARE_SIZE / 2, cy = cx;
-      const g1 = lighten(c0, 0.45), g2 = lighten(c1, 0.45);
-      const rOuter = SQUARE_SIZE * 0.62;
-      const glowGrad = vctx.createRadialGradient(cx, cy, SQUARE_SIZE * 0.32, cx, cy, rOuter);
-      glowGrad.addColorStop(0, rgbaStr(g1, 0.4));
-      glowGrad.addColorStop(0.6, rgbaStr(g2, 0.18));
-      glowGrad.addColorStop(1, rgbaStr(g2, 0));
-      vctx.fillStyle = glowGrad;
-      vctx.beginPath();
-      vctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
-      vctx.fill();
-    }
-
     vctx.save();
     vctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    // квадратное свечение картинки — рисуется ПЕРВЫМ, то есть это
+    // самый задний слой: позади палочек, их свечения и частиц.
+    // Во время зума немного разгорается вместе с блумом.
+    if(squareTrackId !== null){
+      if(!imgGlowReady) renderImageGlow();
+      vctx.globalAlpha = Math.min(1, IMG_GLOW_ALPHA * (1 + 0.35 * zoomEnv));
+      vctx.drawImage(imgGlowCanvas, 0, 0);
+      vctx.globalAlpha = 1;
+    }
+
     if(CAN_FILTER){
       vctx.filter = 'blur(' + (GLOW_BLUR * dpr) + 'px)';
       vctx.globalAlpha = GLOW_ALPHA;
@@ -1401,7 +1578,7 @@
     spawnParticles(energy);
     updateAndDrawParticles(lowEnergy > 0.35);
 
-    updateBassZoom();
+    updateBassZoom(bassDb, now, dt);
   }
 
   function startVisualizer(){
@@ -1424,6 +1601,7 @@
     particles = [];
     lowState.fill(0);
     highState.fill(0);
+    resetZoomState();
     clearCanvas(bctx);
     clearCanvas(vctx);
   }
