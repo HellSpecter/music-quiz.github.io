@@ -943,7 +943,7 @@
   const audioEl = new Audio();
   // громкость элемента ВСЕГДА 1 — регулировка идёт GainNode'ом после
   // анализатора, поэтому на палочки она не влияет
-  audioEl.volume = 1;
+  audioEl.volume = 0.5;
   let userVolume = 1;
 
   let currentVizColors = [[108,99,255],[56,232,224]];
@@ -1126,9 +1126,9 @@
      Если верхний слой еле шевелится — поднимите HIGH_GAIN или
      опустите HIGH_FLOOR. Если низ постоянно в потолке — поднимите
      LOW_FLOOR (например до 0.60) или уменьшите LOW_GAIN.        */
-  const LOW_FLOOR  = 0.50, LOW_GAIN  = 1.25; // 20-116 Гц
-  const HIGH_FLOOR = 0.28, HIGH_GAIN = 1.30; // 1000-2000 Гц
-  const SMOOTH     = 0.55;                   // сглаживание кадров, 0 = совсем без него
+  const LOW_FLOOR  = 0.65, LOW_GAIN  = 1.25; // 20-116 Гц
+  const HIGH_FLOOR = 0.3, HIGH_GAIN = 1.2; // 1000-2000 Гц
+  const SMOOTH     = 0.50;                   // сглаживание кадров, 0 = совсем без него
   const MAX_BAR_LOW  = 195;  // максимальная длина палочки низов
   const MAX_BAR_HIGH = 178;  // максимальная длина палочки верхов
   const GLOW_BLUR  = 15;    // радиус общего свечения, px
@@ -1328,17 +1328,20 @@
 
     clearCanvas(bctx);
 
+    // СЛОЙ 2 (передний): низкие частоты — узкие яркие палочки
+    const narrowW = Math.max(1, wideW * 0.5);
+    drawLayer(lowState, MAX_BAR_LOW, narrowW, function(t){
+      return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
+    });
+
+    
     // СЛОЙ 1 (задний): верхние частоты — широкие приглушённые палочки
     const wideW = Math.max(1, BASE_STEP - 2.4);
     drawLayer(highState, MAX_BAR_HIGH, wideW, function(t){
       return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
     });
 
-    // СЛОЙ 2 (передний): низкие частоты — узкие яркие палочки
-    const narrowW = Math.max(1, wideW * 0.5);
-    drawLayer(lowState, MAX_BAR_LOW, narrowW, function(t){
-      return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
-    });
+
 
     // общее свечение: один размытый проход по уже готовым слоям
     clearCanvas(vctx);
