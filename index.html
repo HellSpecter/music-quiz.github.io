@@ -1327,13 +1327,6 @@
     const c0 = currentVizColors[0], c1 = currentVizColors[1];
 
     clearCanvas(bctx);
-
-    // СЛОЙ 2 (передний): низкие частоты — узкие яркие палочки
-    const narrowW = Math.max(1, wideW * 0.5);
-    drawLayer(lowState, MAX_BAR_LOW, narrowW, function(t){
-      return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
-    });
-
     
     // СЛОЙ 1 (задний): верхние частоты — широкие приглушённые палочки
     const wideW = Math.max(1, BASE_STEP - 2.4);
@@ -1341,6 +1334,14 @@
       return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
     });
 
+
+    // СЛОЙ 2 (передний): низкие частоты — узкие яркие палочки
+    // const narrowW = Math.max(1, wideW * 0.5);
+    const wideW = Math.max(1, BASE_STEP - 2.4);
+    drawLayer(lowState, MAX_BAR_LOW, narrowW, function(t){
+      return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
+      // return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
+    });
 
 
     // общее свечение: один размытый проход по уже готовым слоям
