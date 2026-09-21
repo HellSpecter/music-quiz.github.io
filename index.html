@@ -943,7 +943,7 @@
   const audioEl = new Audio();
   // громкость элемента ВСЕГДА 1 — регулировка идёт GainNode'ом после
   // анализатора, поэтому на палочки она не влияет
-  audioEl.volume = 0.5;
+  audioEl.volume = 1;
   let userVolume = 1;
 
   let currentVizColors = [[108,99,255],[56,232,224]];
@@ -1127,7 +1127,7 @@
      опустите HIGH_FLOOR. Если низ постоянно в потолке — поднимите
      LOW_FLOOR (например до 0.60) или уменьшите LOW_GAIN.        */
   const LOW_FLOOR  = 0.65, LOW_GAIN  = 1.25; // 20-116 Гц
-  const HIGH_FLOOR = 0.3, HIGH_GAIN = 1.2; // 1000-2000 Гц
+  const HIGH_FLOOR = 0.3, HIGH_GAIN = 1.26; // 1000-2000 Гц
   const SMOOTH     = 0.50;                   // сглаживание кадров, 0 = совсем без него
   const MAX_BAR_LOW  = 195;  // максимальная длина палочки низов
   const MAX_BAR_HIGH = 178;  // максимальная длина палочки верхов
