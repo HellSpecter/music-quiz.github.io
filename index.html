@@ -129,6 +129,36 @@
   }
   .square-zone.has-track .square-placeholder{ display:none; }
 
+  /* ---------- круг обратного отсчёта авто-режима ---------- */
+  .countdown-ring{
+    position:absolute;
+    left:50%; top:50%;
+    width:300px; height:300px;
+    margin:-150px 0 0 -150px;
+    z-index:3;
+    display:none;
+    pointer-events:none;
+    filter:drop-shadow(0 0 10px rgba(0,0,0,.55));
+  }
+  .countdown-ring.visible{ display:block; }
+  .countdown-ring circle{
+    fill:none;
+    stroke:rgb(var(--ui-highlight));
+    stroke-width:5;
+    stroke-linecap:round;
+    /* 2*PI*46 = 289.03 — полная длина окружности */
+    stroke-dasharray:289.03;
+    transform:rotate(-90deg);
+    transform-origin:50% 50%;
+  }
+  .countdown-ring.visible circle{
+    animation:countdownSweep var(--countdown-time, 3s) linear forwards;
+  }
+  @keyframes countdownSweep{
+    from{ stroke-dashoffset:0; }
+    to  { stroke-dashoffset:289.03; }
+  }
+
   .square-zone > .chip{
     width:100%; height:100%;
     border-radius:0;
@@ -142,7 +172,15 @@
     transition:opacity .2s;
     z-index:100; /* поверх всех эффектов визуализатора */
   }
-  .player-controls.disabled{ opacity:.35; pointer-events:none; }
+  /* когда в плеере нет трека, гасим только те элементы, которые без
+     трека бессмысленны. Кнопка авто-воспроизведения остаётся рабочей —
+     иначе включить авто-режим при пустом плеере было бы невозможно */
+  .player-controls.disabled .progress-track,
+  .player-controls.disabled .volume-pill,
+  .player-controls.disabled .play-pause-btn{
+    opacity:.35;
+    pointer-events:none;
+  }
   .progress-track{
     width:100%; height:6px;
     border-radius:3px;
@@ -203,6 +241,27 @@
     flex:0 0 auto;
   }
   .play-pause-btn:hover{ background:#3a3a40; transform:scale(1.04); }
+  .right-controls{ display:flex; align-items:center; gap:12px; flex:0 0 auto; }
+  .auto-btn{
+    width:56px; height:56px;
+    border-radius:14px;
+    border:1px solid var(--border-neutral);
+    background:var(--surface);
+    color:var(--text-muted);
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:background .15s, transform .15s, color .15s, border-color .15s, box-shadow .15s;
+    padding:0;
+    flex:0 0 auto;
+  }
+  .auto-btn:hover{ background:#3a3a40; transform:scale(1.04); }
+  .auto-btn.active{
+    color:rgb(var(--ui-highlight));
+    border-color:rgb(var(--ui-highlight));
+    background:rgba(var(--ui-highlight), .14);
+    box-shadow:0 0 14px rgba(var(--ui-highlight), .35);
+  }
+  .auto-btn svg{ width:26px; height:26px; }
   .play-pause-btn img{
     width:24px; height:24px;
     filter:brightness(0) saturate(100%) invert(1);
@@ -222,6 +281,14 @@
   .chip:active{ cursor:grabbing; }
   .chip.dragging{ opacity:.35; }
   .chip img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; transform-origin:center; }
+  /* непрослушанные треки в пуле — картинка сильно размыта,
+     номер поверх неё остаётся чётким. Размытие задано в cqw, то есть
+     в долях ширины самой фишки, поэтому выглядит одинаково при любом
+     размере. scale(1.35) убирает светлую кайму по краям. */
+  #poolSlots .chip.unheard img{
+    filter:blur(5cqw);
+    transform:scale(1.35);
+  }
   .chip-num{
     position:absolute; right:4%; bottom:2%;
     font-family:'Manrope',sans-serif;
@@ -235,7 +302,7 @@
 
   /* ---------- правая половина ---------- */
   .zones-container{
-    position:absolute; left:1350px; top:65px;
+    position:absolute; left:1350px; top:50px;
     width:1148px; height:935px;
     border:3px solid var(--border-strong);
     border-radius:28px;
@@ -280,6 +347,7 @@
   /* ---------- пул треков ---------- */
   .pool-container{
     position:absolute; left:1350px; top:1016px;
+    overflow:hidden;
     width:960px; height:140px;
     border:2px solid var(--border-neutral);
     border-radius:20px;
@@ -301,6 +369,27 @@
     flex:0 0 auto;
   }
   .pool-plus:hover{ background:#3a3a40; transform:scale(1.04); }
+  /* диагональные штрихи — признак включённого авто-режима */
+  .pool-container::before{
+    content:'';
+    position:absolute; inset:0;
+    z-index:0;
+    pointer-events:none;
+    opacity:0;
+    transition:opacity .3s;
+    background:repeating-linear-gradient(45deg,
+      rgba(var(--ui-highlight), .10) 0 9px,
+      rgba(var(--ui-highlight), 0) 9px 28px);
+  }
+  .pool-container.auto-on::before{
+    opacity:1;
+    animation:poolStripes 4s linear infinite;
+  }
+  @keyframes poolStripes{
+    from{ background-position:0 0; }
+    to  { background-position:39.6px 0; }
+  }
+  #poolSlots, .pool-plus{ position:relative; z-index:1; }
 
   /* ---------- кнопка «Отправить ответы» ---------- */
   .submit-btn{
@@ -388,6 +477,30 @@
   /* ==========================================================
      TOAST
      ========================================================== */
+  /* невидимая кнопка в правом верхнем углу: 10 кликов подряд
+     открывают принудительную отправку */
+  #secretCorner{
+    position:fixed; right:0; top:0;
+    width:90px; height:90px;
+    z-index:450;
+    opacity:0;
+    background:transparent;
+  }
+  .force-area{
+    width:100%; margin-top:16px;
+    min-height:120px;
+    padding:12px 14px;
+    border-radius:10px;
+    border:1px solid var(--border-neutral);
+    background:var(--surface-2);
+    color:var(--text-primary);
+    font-family:'Manrope',sans-serif; font-size:15px;
+    line-height:1.5;
+    resize:vertical;
+    user-select:text;
+  }
+  .force-area:focus{ outline:none; border-color:rgb(var(--ui-highlight)); }
+
   #toast{
     position:fixed; left:50%; bottom:48px;
     transform:translate(-50%, 20px);
@@ -419,6 +532,9 @@
     <canvas id="vizCanvas"></canvas>
     <div class="square-zone" id="squareZone">
       <div class="square-placeholder">Перетащите,<br>чтобы послушать</div>
+      <svg class="countdown-ring" id="countdownRing" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46"></circle>
+      </svg>
     </div>
   </div>
 
@@ -434,9 +550,19 @@
         <input type="range" class="volume-slider" id="volumeSlider" min="0" max="1" step="0.01" value="1">
         <span class="volume-pct" id="volumePct">100%</span>
       </div>
-      <button class="play-pause-btn" id="playPauseBtn" type="button">
-        <img id="playPauseIcon" src="ui/play.png" alt="Play/Pause" draggable="false">
-      </button>
+      <div class="right-controls">
+        <button class="auto-btn" id="autoBtn" type="button" title="Авто-воспроизведение">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 8h13a3 3 0 0 1 3 3v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="M7 5 4 8l3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20 16H7a3 3 0 0 1-3-3v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="m17 19 3-3-3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="play-pause-btn" id="playPauseBtn" type="button">
+          <img id="playPauseIcon" src="ui/play.png" alt="Play/Pause" draggable="false">
+        </button>
+      </div>
     </div>
   </div>
 
@@ -461,7 +587,13 @@
 <div class="modal-backdrop" id="rulesModal">
   <div class="modal-card">
     <h2>Правила</h2>
-    <p>Здесь появится текст правил. Замените этот плейсхолдер своим текстом в файле index.html (блок с id="rulesModal").</p>
+    <p>✅Каждый участник скинул 4 трека✅<br>
+💟3 трека - это ваши реально любимые или те, которые вам сильно нравятся.💘<br>💟 Главное, чтобы вы это слушали💞, а не рандом треки.💕<br>
+🌠1 трек - это какой-то трендовый трек из тиктока 🎭 или шортс🎤, <br>который вам понравится (можно даже старые)🌠<br>
+Вам нужно прослушать все треки и попытаться угадать кто и какой трек отправил.<br>
+Доступна кнопка Авто-мод, <br>с её помощью мы можете слушать треки в автоматическом режиме, подряд. <br>
+В конце нажмите кнопку Отправить ответы.
+</p>
     <div class="modal-actions">
       <button class="modal-btn primary" id="rulesClose">Понятно</button>
     </div>
@@ -491,6 +623,20 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="forceModal">
+  <div class="modal-card">
+    <h2>Принудительная отправка</h2>
+    <p>Строка ниже будет отправлена как есть. Можно отредактировать вручную.</p>
+    <textarea id="forceInput" class="force-area" spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" id="forceCancel">Отмена</button>
+      <button class="modal-btn primary" id="forceSubmitBtn">Отправить как есть</button>
+    </div>
+  </div>
+</div>
+
+<div id="secretCorner" title=""></div>
+
 <div id="toast"></div>
 
 <script>
@@ -516,9 +662,9 @@
     { name:'Юра',    color:'255,162,0',   active:true },
     { name:'Вася',   color:'106,140,171', active:true },
     { name:'Дима',   color:'252,255,0',   active:true },
-    { name:'Никита', color:'6,0,255',     active:true },
+    { name:'Александр Р.', color:'72,217,109',     active:true },
     { name:'Артём',  color:'0,180,255',   active:true },
-    { name:'Альп',   color:'48,29,111',   active:true },
+    { name:'Рома',   color:'255,128,128',   active:true },
     { name:'',       color:'92,92,99',    active:false }
   ];
 
@@ -526,6 +672,10 @@
   const GOOGLE_FORM_FIELD  = 'entry.2025397665';
 
   const POOL_VISIBLE      = 6;
+  /* --- АВТО-ВОСПРОИЗВЕДЕНИЕ --- */
+  const AUTO_WAIT_MS   = 3000; // сколько ждать распределения после конца трека
+  const AUTO_NEXT_MS   = 1000; // пауза после того, как трек распределили
+  const FADE_SEC       = 0.25; // плавное появление и затухание громкости
   const DEFAULT_ZONE_ICON = 115;
   const MIN_ZONE_ICON     = 10;
   const ZONE_ROW_CAP      = 8;
@@ -554,10 +704,64 @@
   const zoneAssignments = {};
   let squareTrackId = null;
   let squareTrackOrigin = null; // откуда трек попал в плеер
+  const playedIds = new Set();  // треки, которые уже побывали в плеере
+
+  /* Скрытый «карман» для фишек, которые сейчас не видны в пуле.
+     Раньше он был display:none. Это опасно: если фишку, которую
+     пользователь как раз перетаскивает, спрятать таким образом, браузер
+     теряет её и событие окончания перетаскивания может не прийти —
+     после этого перетаскивание перестаёт работать на всей странице до
+     перезапуска браузера. Теперь карман просто уезжает за экран:
+     элементы остаются живыми и видимыми для браузера. */
+  /* ==========================================================
+     СОХРАНЕНИЕ ПРОГРЕССА В БРАУЗЕРЕ
+     Распределение, прослушанные треки и имя переживают перезагрузку
+     страницы. Ключ привязан к количеству треков: если список треков
+     поменяется, старое сохранение просто игнорируется.
+     ========================================================== */
+  const SAVE_KEY = 'music-quiz-progress-v1';
+  let savedName = '';
+  let restoring = false;
+
+  function saveState(){
+    if(restoring) return;
+    try{
+      const zones = {};
+      for(const z in zoneAssignments) zones[z] = zoneAssignments[z].slice();
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        v: 1,
+        total: TOTAL_TRACKS,
+        zones: zones,
+        pool: poolOrder.slice(),
+        square: squareTrackId,
+        played: Array.from(playedIds),
+        name: savedName
+      }));
+    }catch(err){ /* приватный режим или переполнение — просто не сохраняем */ }
+  }
+
+  function readSavedState(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(!raw) return null;
+      const st = JSON.parse(raw);
+      if(!st || st.v !== 1 || st.total !== TOTAL_TRACKS) return null;
+      return st;
+    }catch(err){ return null; }
+  }
 
   const poolBuffer = document.createElement('div');
-  poolBuffer.style.display = 'none';
+  poolBuffer.style.cssText = 'position:absolute;left:-10000px;top:0;width:0;height:0;overflow:hidden;';
   document.body.appendChild(poolBuffer);
+
+  /* Любые перестроения DOM выполняем не внутри обработчика «бросили», а
+     сразу после него — чтобы браузер успел штатно завершить перетаскивание. */
+  function deferDrop(fn){ setTimeout(fn, 0); }
+
+  function clearStuckDragging(){
+    const stuck = document.querySelectorAll('.chip.dragging');
+    for(let i = 0; i < stuck.length; i++) stuck[i].classList.remove('dragging');
+  }
 
   /* ==========================================================
      ОПРЕДЕЛЕНИЕ КОЛИЧЕСТВА ТРЕКОВ
@@ -603,7 +807,7 @@
      ========================================================== */
   function createChip(id){
     const chip = document.createElement('div');
-    chip.className = 'chip';
+    chip.className = 'chip unheard';
     chip.draggable = true;
     chip.dataset.id = String(id);
 
@@ -627,6 +831,7 @@
     });
     chip.addEventListener('dragend', function(){
       chip.classList.remove('dragging');
+      clearStuckDragging();
     });
 
     chip.addEventListener('dragover', function(e){
@@ -647,20 +852,26 @@
         const z = Number(zoneEl.dataset.zone);
         const rect = chip.getBoundingClientRect();
         const before = (e.clientX - rect.left) < rect.width / 2;
-        moveTrackToZoneAt(draggedIdStr, z, targetId, before);
+        deferDrop(function(){ moveTrackToZoneAt(draggedIdStr, z, targetId, before); });
         return;
       }
       if(chip.closest('.square-zone')){
-        moveTrackTo(draggedIdStr, 'square');
+        deferDrop(function(){ moveTrackTo(draggedIdStr, 'square'); });
         return;
       }
-      moveTrackTo(draggedIdStr, 'pool');
+      deferDrop(function(){ moveTrackTo(draggedIdStr, 'pool'); });
     });
 
     return chip;
   }
 
   function getChip(id){ return chipsById.get(Number(id)); }
+
+  document.addEventListener('dragend', clearStuckDragging, true);
+  document.addEventListener('drop', function(){ setTimeout(clearStuckDragging, 0); }, true);
+  window.addEventListener('mousedown', clearStuckDragging);
+  // браузер иногда не завершает перетаскивание, если курсор ушёл за окно
+  window.addEventListener('blur', clearStuckDragging);
 
   /* ==========================================================
      ПОСТРОЕНИЕ ЗОН УЧАСТНИКОВ
@@ -700,7 +911,7 @@
           e.preventDefault();
           zoneEl.classList.remove('dragover');
           const id = e.dataTransfer.getData('text/plain');
-          if(id !== '') moveTrackTo(id, 'zone', z);
+          if(id !== '') deferDrop(function(){ moveTrackTo(id, 'zone', z); });
         });
       }
     }
@@ -770,7 +981,7 @@
     e.preventDefault();
     poolContainer.classList.remove('dragover');
     const id = e.dataTransfer.getData('text/plain');
-    if(id !== '') moveTrackTo(id, 'pool');
+    if(id !== '') deferDrop(function(){ moveTrackTo(id, 'pool'); });
   });
 
   /* ==========================================================
@@ -791,7 +1002,7 @@
     e.preventDefault();
     squareZone.classList.remove('dragover');
     const id = e.dataTransfer.getData('text/plain');
-    if(id !== '') moveTrackTo(id, 'square');
+    if(id !== '') deferDrop(function(){ moveTrackTo(id, 'square'); });
   });
 
   function updatePlayerControlsState(){
@@ -860,7 +1071,9 @@
     }
 
     if(squareTrackId === id){
+      clearTimeout(pauseFadeTimer);
       audioEl.pause();
+      hideCountdown();
       stopVisualizer();
       squareTrackId = null;
       squareTrackOrigin = null;
@@ -877,6 +1090,9 @@
     if(!chipsById.has(id)) return;
     if(destType === 'square' && squareTrackId === id) return;
 
+    // трек уезжает из плеера — в авто-режиме это сигнал «игрок распределил»
+    const leavingPlayer = (squareTrackId === id && destType !== 'square');
+
     const originOfNew = locateTrack(id);
 
     const touchedZones = new Set();
@@ -892,6 +1108,11 @@
     touchedZones.forEach(function(z){ if(z !== destZone) resizeZoneIcons(z); });
 
     if(destType === 'pool'){
+      // БАГФИКС: если пул переполнен, фишка не попадёт на видимую страницу,
+      // и refreshPoolRender() её не тронет — раньше элемент так и оставался
+      // висеть в плеере или в зоне. Поэтому убираем его из старого места
+      // сразу, в скрытый буфер пула.
+      poolBuffer.appendChild(chip);
       poolOrder.push(id);
       refreshPoolRender();
 
@@ -911,11 +1132,15 @@
       resizeZoneIcons(destZone);
       refreshPoolRender();
     }
+
+    saveState();
+    if(leavingPlayer) onPlayerTrackReleased();
   }
 
   function moveTrackToZoneAt(idStr, destZone, targetId, before){
     const id = Number(idStr);
     if(!chipsById.has(id)) return;
+    const leavingPlayer = (squareTrackId === id);
 
     const touchedZones = new Set();
     for(const z in zoneAssignments){
@@ -935,12 +1160,16 @@
     arr.forEach(function(tid){ contentEl.appendChild(getChip(tid)); });
     resizeZoneIcons(destZone);
     refreshPoolRender();
+
+    saveState();
+    if(leavingPlayer) onPlayerTrackReleased();
   }
 
   /* ==========================================================
      АУДИО
      ========================================================== */
   const audioEl = new Audio();
+  audioEl.preload = 'auto'; // раньше начинаем буферизацию — раньше работает перемотка
   // громкость элемента ВСЕГДА 1 — регулировка идёт GainNode'ом после
   // анализатора, поэтому на палочки она не влияет
   audioEl.volume = 1;
@@ -962,6 +1191,14 @@
       Math.round(rgb[0] * (1 - amount)),
       Math.round(rgb[1] * (1 - amount)),
       Math.round(rgb[2] * (1 - amount))
+    ];
+  }
+  function saturate(rgb, amount){
+    const avg = (rgb[0] + rgb[1] + rgb[2]) / 3;
+    return [
+      Math.min(255, Math.max(0, Math.round(avg + (rgb[0] - avg) * (1 + amount)))),
+      Math.min(255, Math.max(0, Math.round(avg + (rgb[1] - avg) * (1 + amount)))),
+      Math.min(255, Math.max(0, Math.round(avg + (rgb[2] - avg) * (1 + amount))))
     ];
   }
   function lerpColor(c1, c2, t){
@@ -1001,11 +1238,153 @@
     imgGlowReady = false; // цвета поменялись — свечение перерисуется на следующем кадре
   }
 
+  /* ==========================================================
+     ПЛАВНОЕ ПОЯВЛЕНИЕ И ЗАТУХАНИЕ ГРОМКОСТИ (1/4 секунды)
+     ========================================================== */
+  let endFadeArmed = false;
+  let pauseFadeTimer = null;
+
+  function fadeTo(value, sec){
+    if(!audioCtx || !fadeGain) return;
+    const t = audioCtx.currentTime;
+    const g = fadeGain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    g.linearRampToValueAtTime(value, t + Math.max(0.01, sec === undefined ? FADE_SEC : sec));
+  }
+  function fadeFromSilence(){
+    if(!audioCtx || !fadeGain) return;
+    const t = audioCtx.currentTime;
+    const g = fadeGain.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(0, t);
+    g.linearRampToValueAtTime(1, t + FADE_SEC);
+  }
+  function pauseWithFade(){
+    fadeTo(0);
+    clearTimeout(pauseFadeTimer);
+    pauseFadeTimer = setTimeout(function(){ audioEl.pause(); }, FADE_SEC * 1000);
+  }
+
+  /* ==========================================================
+     АВТО-ВОСПРОИЗВЕДЕНИЕ
+     Порядок работы:
+       трек закончился -> поверх картинки появляется круг и тает по
+       часовой стрелке AUTO_WAIT_MS. Успели распределить трек -> ждём
+       AUTO_NEXT_MS и ставим следующий. Не успели -> трек уходит в пул
+       на своё порядковое место, следующий ставится сразу.
+     Следующим берётся трек из пула с наименьшим номером среди тех,
+     что ещё ни разу не были в плеере.
+     ========================================================== */
+  let autoMode = false;
+  let autoTimer = null;
+  let autoToken = 0;
+  let suppressAutoAdvance = false;
+  const countdownRing = document.getElementById('countdownRing');
+  const autoBtn = document.getElementById('autoBtn');
+
+  function hideCountdown(){ countdownRing.classList.remove('visible'); }
+  function showCountdown(){
+    countdownRing.style.setProperty('--countdown-time', (AUTO_WAIT_MS / 1000) + 's');
+    countdownRing.classList.remove('visible');
+    void countdownRing.getBoundingClientRect(); // перезапуск анимации
+    countdownRing.classList.add('visible');
+  }
+  function cancelAutoTimers(){
+    autoToken++;
+    if(autoTimer){ clearTimeout(autoTimer); autoTimer = null; }
+    hideCountdown();
+  }
+
+  function insertIntoPoolOrdered(id){
+    let i = 0;
+    while(i < poolOrder.length && poolOrder[i] < id) i++;
+    poolOrder.splice(i, 0, id);
+  }
+
+  function nextAutoTrackId(){
+    let best = null;
+    for(let i = 0; i < poolOrder.length; i++){
+      const id = poolOrder[i];
+      if(playedIds.has(id)) continue;
+      if(best === null || id < best) best = id;
+    }
+    return best;
+  }
+
+  function returnPlayerTrackToPoolOrdered(){
+    if(squareTrackId === null) return;
+    const id = squareTrackId;
+    suppressAutoAdvance = true;
+    const chip = detachTrack(id);
+    poolBuffer.appendChild(chip);
+    insertIntoPoolOrdered(id);
+    refreshPoolRender();
+    suppressAutoAdvance = false;
+    saveState();
+  }
+
+  function autoAdvance(delayMs){
+    cancelAutoTimers();
+    const token = autoToken;
+    autoTimer = setTimeout(function(){
+      autoTimer = null;
+      if(token !== autoToken || !autoMode) return;
+      const nextId = nextAutoTrackId();
+      if(nextId === null){
+        // треки кончились: плеер пустеет и встаёт на паузу
+        returnPlayerTrackToPoolOrdered();
+        audioEl.pause();
+        return;
+      }
+      moveTrackTo(String(nextId), 'square');
+    }, delayMs);
+  }
+
+  function startAutoCountdown(){
+    cancelAutoTimers();
+    showCountdown();
+    const token = autoToken;
+    autoTimer = setTimeout(function(){
+      autoTimer = null;
+      if(token !== autoToken || !autoMode) return;
+      hideCountdown();
+      returnPlayerTrackToPoolOrdered(); // не успели распределить
+      autoAdvance(0);
+    }, AUTO_WAIT_MS);
+  }
+
+  // трек забрали из плеера (распределили вручную или он уехал сам)
+  function onPlayerTrackReleased(){
+    if(suppressAutoAdvance) return;
+    hideCountdown();
+    if(autoMode) autoAdvance(AUTO_NEXT_MS);
+  }
+
+  autoBtn.addEventListener('click', function(){
+    autoMode = !autoMode;
+    autoBtn.classList.toggle('active', autoMode);
+    poolContainer.classList.toggle('auto-on', autoMode);
+    if(!autoMode){ cancelAutoTimers(); return; }
+    if(squareTrackId === null) autoAdvance(AUTO_NEXT_MS);
+    else if(audioEl.ended) startAutoCountdown();
+  });
+
   function playTrack(id){
     ensureAudioGraph();
+    cancelAutoTimers();
+    clearTimeout(pauseFadeTimer);
+    playedIds.add(id);
+    const chipEl = getChip(id);
+    if(chipEl) chipEl.classList.remove('unheard');
+    saveState(); // трек прослушан — снимаем размытие
     trackReady = false;
+    endFadeArmed = false;
+    pendingSeekRatio = null;
+    reloadAttempts = 0;
     lowState.fill(0);
     highState.fill(0);
+    if(fadeGain) fadeGain.gain.value = 0; // старт из тишины, дальше плавное появление
     audioEl.src = SONGS_DIR + '/' + id + AUDIO_EXT;
     audioEl.currentTime = 0;
     progressFill.style.width = '0%';
@@ -1019,19 +1398,35 @@
   function toggleReplayOrPause(){
     if(squareTrackId === null) return;
     ensureAudioGraph();
+    clearTimeout(pauseFadeTimer);
     if(audioEl.ended || audioEl.paused){
-      if(audioEl.ended) audioEl.currentTime = 0;
+      if(audioEl.ended){ audioEl.currentTime = 0; endFadeArmed = false; cancelAutoTimers(); }
       audioEl.play().catch(function(){});
     } else {
-      audioEl.pause();
+      pauseWithFade();
     }
   }
   playPauseBtn.addEventListener('click', toggleReplayOrPause);
 
   let trackReady = false;
-  audioEl.addEventListener('loadedmetadata', function(){ trackReady = true; });
+  let reloadAttempts = 0;
+
+  function applyPendingSeek(){
+    if(pendingSeekRatio === null) return;
+    const r = pendingSeekRatio;
+    pendingSeekRatio = null;
+    applySeekRatio(r);
+  }
+  audioEl.addEventListener('loadedmetadata', function(){ trackReady = true; applyPendingSeek(); });
+  audioEl.addEventListener('durationchange', applyPendingSeek);
+  audioEl.addEventListener('canplay', applyPendingSeek);
+
   audioEl.addEventListener('error', function(){
     if(squareTrackId === null) return;
+    // перезагружаем трек не больше двух раз подряд: бесконечный цикл
+    // перезагрузок раньше мог сам сбрасывать воспроизведение в начало
+    if(reloadAttempts >= 2) return;
+    reloadAttempts++;
     const savedTime = audioEl.currentTime || 0;
     const src = audioEl.src;
     trackReady = false;
@@ -1041,6 +1436,7 @@
   });
 
   audioEl.addEventListener('play', function(){
+    if(fadeGain && fadeGain.gain.value < 0.999) fadeFromSilence();
     playPauseIcon.src = 'ui/pause.png';
     squareZone.classList.add('playing');
     playerWrap.classList.add('floating');
@@ -1061,17 +1457,65 @@
     stopVisualizer();
     const chip = squareTrackId !== null ? getChip(squareTrackId) : null;
     if(chip) resetChipVisualFx(chip);
+    if(autoMode && squareTrackId !== null) startAutoCountdown();
   });
   audioEl.addEventListener('timeupdate', function(){
-    const pct = audioEl.duration ? (audioEl.currentTime / audioEl.duration * 100) : 0;
+    const dur = audioEl.duration;
+    const pct = dur ? (audioEl.currentTime / dur * 100) : 0;
     progressFill.style.width = pct + '%';
+    // плавное затухание в самом конце трека
+    if(!endFadeArmed && isFinite(dur) && dur > FADE_SEC * 2){
+      const left = dur - audioEl.currentTime;
+      if(left <= FADE_SEC + 0.05){
+        endFadeArmed = true;
+        fadeTo(0, Math.max(0.05, left));
+      }
+    }
   });
 
+  /* Перемотка.
+     Раньше клик по полосе просто игнорировался, пока браузер не считал
+     длительность трека (а сразу после броска в плеер она ещё неизвестна),
+     и полоса продолжала ползти с начала — это и выглядело как «сбросилось
+     в начало». Теперь клик, сделанный слишком рано, запоминается и
+     применяется, как только длительность станет известна.
+     Плюс цель перемотки прижимается к тому куску, который браузер уже
+     может проиграть: прыжок за пределы загруженного некоторые браузеры
+     отбрасывают в самое начало. */
+  let pendingSeekRatio = null;
+
+  function applySeekRatio(ratio){
+    const dur = audioEl.duration;
+    if(!isFinite(dur) || dur <= 0){ pendingSeekRatio = ratio; return; }
+    let target = ratio * dur;
+    const sk = audioEl.seekable;
+    if(sk && sk.length){
+      const lo = sk.start(0), hi = sk.end(sk.length - 1);
+      if(hi > lo){
+        if(target > hi) target = Math.max(lo, hi - 0.05);
+        if(target < lo) target = lo;
+      }
+    }
+    audioEl.currentTime = target;
+    progressFill.style.width = (target / dur * 100) + '%';
+    if(endFadeArmed && dur - target > FADE_SEC + 0.3){
+      endFadeArmed = false;
+      fadeTo(1, 0.1);
+    }
+  }
+
   function seekFromEvent(e){
-    if(squareTrackId === null || !trackReady || !audioEl.duration || !isFinite(audioEl.duration)) return;
+    if(squareTrackId === null) return;
     const rect = progressTrack.getBoundingClientRect();
+    if(!rect.width) return;
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    audioEl.currentTime = ratio * audioEl.duration;
+    if(!trackReady || !isFinite(audioEl.duration) || !audioEl.duration){
+      // трек ещё грузится — запомним и перемотаем, как только сможем
+      pendingSeekRatio = ratio;
+      progressFill.style.width = (ratio * 100) + '%';
+      return;
+    }
+    applySeekRatio(ratio);
   }
   let scrubbing = false;
   let lastSeekAt = 0;
@@ -1113,7 +1557,7 @@
      складываются, и это на порядок дешевле, чем shadowBlur на
      каждой из 400+ палочек — именно он и вызывал лаги.
      ========================================================== */
-  let audioCtx = null, analyser = null, sourceNode = null, gainNode = null, rafId = null;
+  let audioCtx = null, analyser = null, sourceNode = null, gainNode = null, fadeGain = null, rafId = null;
 
   const WRAP_SIZE     = 1100;
   const SQUARE_SIZE   = 760;
@@ -1246,9 +1690,14 @@
       analyser.smoothingTimeConstant = 0.0; // сглаживаем сами, одним коэффициентом
       gainNode = audioCtx.createGain();
       gainNode.gain.value = userVolume;
+      // отдельный узел для плавного появления/затухания громкости;
+      // он стоит после анализатора, поэтому на палочки не влияет
+      fadeGain = audioCtx.createGain();
+      fadeGain.gain.value = 1;
 
       sourceNode.connect(analyser);
-      analyser.connect(gainNode);
+      analyser.connect(fadeGain);
+      fadeGain.connect(gainNode);
       gainNode.connect(audioCtx.destination);
 
       const binHz = audioCtx.sampleRate / analyser.fftSize;
@@ -1541,12 +1990,12 @@
 
     // СЛОЙ 1 (задний): низкие частоты (басы) — теперь позади, а не спереди
     drawLayer(lowState, barW, function(t){
-      return rgbStr(lighten(lerpColor(c0, c1, t), 0.45));
+      return rgbStr(lighten(lerpColor(c0, c1, t), 0.55));
     });
 
     // СЛОЙ 2 (передний): верхние частоты — поверх низких
     drawLayer(highState, barW, function(t){
-      return rgbStr(darken(lerpColor(c0, c1, t), 0.18));
+	  return rgbStr(saturate(darken(lerpColor(c0, c1, t), 0.06), 0.25));
     });
 
     // общее свечение: один размытый проход по уже готовым слоям
@@ -1635,7 +2084,13 @@
   const nameModal     = document.getElementById('nameModal');
   const nameInput     = document.getElementById('nameInput');
 
-  function openNameModal(){
+  const forceModal = document.getElementById('forceModal');
+  const forceInput = document.getElementById('forceInput');
+  let nameMode = 'normal'; // 'normal' или 'force'
+
+  function openNameModal(mode){
+    nameMode = mode || 'normal';
+    if(savedName) nameInput.value = savedName;
     nameModal.classList.add('visible');
     setTimeout(function(){ nameInput.focus(); }, 50);
   }
@@ -1690,7 +2145,21 @@
       showToast('Введите имя.');
       return;
     }
+    savedName = name;
+    saveState();
     const full = name + ' ' + buildAnswerString();
+
+    // принудительный режим: не отправляем сразу, а показываем строку
+    // с возможностью отредактировать её вручную
+    if(nameMode === 'force'){
+      nameMode = 'normal';
+      nameModal.classList.remove('visible');
+      forceInput.value = full;
+      forceModal.classList.add('visible');
+      setTimeout(function(){ forceInput.focus(); }, 50);
+      return;
+    }
+
     try{
       await submitToGoogleForm(full);
     }catch(err){}
@@ -1698,6 +2167,31 @@
     nameInput.value = '';
     showToast('Ответы отправлены! Спасибо, ' + name + '.');
   }
+
+  document.getElementById('forceCancel').addEventListener('click', function(){
+    forceModal.classList.remove('visible');
+  });
+  document.getElementById('forceSubmitBtn').addEventListener('click', async function(){
+    const text = forceInput.value.trim();
+    if(!text){ showToast('Строка пустая.'); return; }
+    try{ await submitToGoogleForm(text); }catch(err){}
+    forceModal.classList.remove('visible');
+    showToast('Отправлено принудительно.');
+  });
+
+  // невидимая кнопка: 10 кликов подряд (перерыв больше 1.5 с сбрасывает счёт)
+  const secretCorner = document.getElementById('secretCorner');
+  let secretClicks = 0, secretTimer = null;
+  secretCorner.addEventListener('click', function(){
+    secretClicks++;
+    clearTimeout(secretTimer);
+    secretTimer = setTimeout(function(){ secretClicks = 0; }, 1500);
+    if(secretClicks >= 10){
+      secretClicks = 0;
+      clearTimeout(secretTimer);
+      openNameModal('force');
+    }
+  });
 
   document.getElementById('nameSubmitBtn').addEventListener('click', doSubmit);
   nameInput.addEventListener('keydown', function(e){
@@ -1714,7 +2208,7 @@
   document.getElementById('rulesClose').addEventListener('click', function(){
     rulesModal.classList.remove('visible');
   });
-  [rulesModal, fairnessModal, nameModal].forEach(function(modal){
+  [rulesModal, fairnessModal, nameModal, forceModal].forEach(function(modal){
     modal.addEventListener('click', function(e){
       if(e.target === modal) modal.classList.remove('visible');
     });
@@ -1742,6 +2236,57 @@
       ids.push(i);
     }
     poolOrder = ids;
+
+    // ---- восстановление сохранённого прогресса ----
+    const st = readSavedState();
+    if(st){
+      restoring = true;
+      const placed = new Set();
+
+      for(const z in zoneAssignments){
+        const list = (st.zones && Array.isArray(st.zones[z])) ? st.zones[z] : [];
+        list.forEach(function(raw){
+          const id = Number(raw);
+          if(!chipsById.has(id) || placed.has(id)) return;
+          placed.add(id);
+          zoneAssignments[z].push(id);
+          zoneContentEls[z].appendChild(getChip(id));
+        });
+      }
+
+      (st.played || []).forEach(function(raw){
+        const id = Number(raw);
+        if(!chipsById.has(id)) return;
+        playedIds.add(id);
+        const c = getChip(id);
+        if(c) c.classList.remove('unheard');
+      });
+
+      const pool = [];
+      (st.pool || []).forEach(function(raw){
+        const id = Number(raw);
+        if(chipsById.has(id) && !placed.has(id) && pool.indexOf(id) === -1) pool.push(id);
+      });
+      // трек, остававшийся в плеере, возвращаем в пул на своё порядковое
+      // место: автозапуск после перезагрузки браузеры всё равно блокируют
+      const sq = Number(st.square);
+      if(chipsById.has(sq) && !placed.has(sq) && pool.indexOf(sq) === -1){
+        let k = 0;
+        while(k < pool.length && pool[k] < sq) k++;
+        pool.splice(k, 0, sq);
+      }
+      for(let i = 1; i <= TOTAL_TRACKS; i++){
+        if(!placed.has(i) && pool.indexOf(i) === -1) pool.push(i);
+      }
+      poolOrder = pool;
+
+      savedName = st.name || '';
+      if(savedName) nameInput.value = savedName;
+
+      for(const z in zoneAssignments) resizeZoneIcons(z);
+      restoring = false;
+      saveState();
+    }
 
     refreshPoolRender();
     loadingEl.style.display = 'none';
